@@ -1,4 +1,5 @@
 from sqlalchemy import Column, Integer, String, DateTime, JSON
+import datetime as _dt
 from .db_session import Base
 import datetime
 
@@ -11,6 +12,7 @@ class Note(Base):
     user = Column(String(50), nullable=False)
     descriptions = Column(String())
     start_at = Column(String(50))
+    created_at = Column(DateTime, default=datetime.datetime.utcnow)
 
     def __str__(self):
         return self.name

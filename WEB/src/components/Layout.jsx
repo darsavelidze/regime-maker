@@ -31,6 +31,15 @@ const icons = {
       <circle cx="12" cy="7" r="4"/>
     </svg>
   ),
+  dumbbell: (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M6.5 6.5h11M6.5 17.5h11"/>
+      <rect x="2" y="8" width="4" height="8" rx="1"/>
+      <rect x="18" y="8" width="4" height="8" rx="1"/>
+      <rect x="6" y="5" width="2" height="14" rx="1"/>
+      <rect x="16" y="5" width="2" height="14" rx="1"/>
+    </svg>
+  ),
 }
 
 export default function Layout() {
@@ -54,6 +63,9 @@ export default function Layout() {
         </NavLink>
         <NavLink to="/day" className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}>
           {icons.calendar}<span>День</span>
+        </NavLink>
+        <NavLink to="/workouts" className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}>
+          {icons.dumbbell}<span>Трен.</span>
         </NavLink>
         <NavLink to="/profile" className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}>
           {icons.user}<span>Профиль</span>

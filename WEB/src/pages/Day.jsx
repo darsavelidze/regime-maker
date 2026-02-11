@@ -105,10 +105,12 @@ export default function Day() {
       </div>
 
       {/* Weekday labels */}
-      <div className="cal-grid">
+      <div className="cal-weekdays">
         {WEEKDAYS.map(w => (
           <div key={w} className="cal-weekday">{w}</div>
         ))}
+      </div>
+      <div className="cal-grid">
         {cells.map((d, i) => {
           if (d === null) return <div key={`e${i}`} className="cal-cell empty" />
           const dateStr = toISO(year, month, d)

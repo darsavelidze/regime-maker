@@ -72,7 +72,7 @@ class DayRequest(BaseModel):
 class NoteCreate(BaseModel):
     """Schema for creating a new note."""
 
-    name: str
+    name: str = ""
     user: str
     descriptions: str
     password: str
@@ -185,3 +185,41 @@ class AnalyticsPublicRequest(BaseModel):
     target_user: str
     user: str
     password: str
+
+
+class CommentCreate(BaseModel):
+    """Schema for creating a comment."""
+
+    target_type: str  # 'cycle' or 'note'
+    target_id: int
+    text: str
+    user: str
+    password: str
+
+    @field_validator("text")
+    @classmethod
+    def text_not_empty(cls, v: str) -> str:
+        if not v.strip():
+            raise ValueError("Comment text must not be empty.")
+        return v.strip()
+
+
+class CommentDelete(BaseModel):
+    """Schema for deleting a comment."""
+
+    comment_id: int
+    user: str
+    password: str
+
+
+class CommentsRequest(BaseModel):
+    """Schema for fetching comments."""
+
+    target_type: str
+    target_id: int
+
+
+class InUsersRequest(BaseModel):
+    """Schema for fetching users who IN'd a cycle."""
+
+    cycle_id: int

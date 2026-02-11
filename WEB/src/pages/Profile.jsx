@@ -6,9 +6,8 @@ import { post, get, auth } from '../api'
 export default function Profile() {
   const { user, logout } = useAuth()
   const nav = useNavigate()
-  const [tab, setTab] = useState('workouts')
+  const [tab, setTab] = useState('notes')
   const [profile, setProfile] = useState(null)
-  const [cycles, setCycles] = useState([])
   const [notes, setNotes] = useState([])
   const [followers, setFollowers] = useState([])
   const [following, setFollowing] = useState([])
@@ -16,18 +15,19 @@ export default function Profile() {
   const [editBio, setEditBio] = useState(false)
   const [loading, setLoading] = useState(true)
   const [menuOpen, setMenuOpen] = useState(null)
+  const [noteComments, setNoteComments] = useState({})
+  const [openComments, setOpenComments] = useState({})
+  const [commentTexts, setCommentTexts] = useState({})
 
   const load = useCallback(async () => {
     try {
-      const [prof, cyc, nt, fData, fgData] = await Promise.all([
+      const [prof, nt, fData, fgData] = await Promise.all([
         get(`/profile/${user.username}/`),
-        post('/user_cycles/', auth(user)),
         post('/get_notes/', auth(user)),
         get(`/followers/${user.username}/`),
         get(`/following/${user.username}/`),
       ])
       setProfile(prof)
-      setCycles(cyc.cycles || [])
       setNotes(nt.notes || [])
       setFollowers(fData.followers || [])
       setFollowing(fgData.following || [])
@@ -46,36 +46,63 @@ export default function Profile() {
     } catch {}
   }
 
-  const togglePublish = async (cycle) => {
-    const endpoint = cycle.is_public ? '/unpublish_cycle/' : '/publish_cycle/'
-    try {
-      await post(endpoint, auth(user, { cycle_name: cycle.name }))
-      load()
-    } catch (err) {
-      alert(err.message || 'Ошибка')
-    }
-  }
-
-  const deleteCycle = async (name) => {
-    if (!confirm('Удалить тренировку?')) return
-    setMenuOpen(null)
-    try {
-      await post('/delete_cycle/', auth(user, { cycle_name: name }))
-      load()
-    } catch {}
-  }
-
   const deleteNote = async (name) => {
     if (!confirm('Удалить заметку?')) return
+    setMenuOpen(null)
     try {
       await post('/delete_note/', auth(user, { note_name: name }))
       load()
     } catch {}
   }
 
+  const loadNoteComments = async (noteId) => {
+    try {
+      const res = await post('/get_comments/', { target_type: 'note', target_id: noteId })
+      setNoteComments(prev => ({ ...prev, [noteId]: res.comments || [] }))
+    } catch {}
+  }
+
+  const toggleNoteComments = (noteId) => {
+    const isOpen = openComments[noteId]
+    if (!isOpen) loadNoteComments(noteId)
+    setOpenComments(prev => ({ ...prev, [noteId]: !isOpen }))
+  }
+
+  const submitNoteComment = async (e, noteId) => {
+    e.preventDefault()
+    const text = (commentTexts[noteId] || '').trim()
+    if (!text) return
+    try {
+      await post('/create_comment/', auth(user, {
+        target_type: 'note', target_id: noteId, text,
+      }))
+      setCommentTexts(prev => ({ ...prev, [noteId]: '' }))
+      loadNoteComments(noteId)
+    } catch {}
+  }
+
+  const deleteComment = async (commentId, noteId) => {
+    try {
+      await post('/delete_comment/', auth(user, { comment_id: commentId }))
+      loadNoteComments(noteId)
+    } catch {}
+  }
+
   const doLogout = () => { logout(); nav('/login') }
 
   if (loading) return <div className="spinner">Загрузка...</div>
+
+  const timeAgo = (iso) => {
+    if (!iso) return ''
+    const diff = Date.now() - new Date(iso).getTime()
+    const mins = Math.floor(diff / 60000)
+    if (mins < 1) return 'только что'
+    if (mins < 60) return `${mins} мин`
+    const hrs = Math.floor(mins / 60)
+    if (hrs < 24) return `${hrs} ч`
+    const days = Math.floor(hrs / 24)
+    return `${days} дн`
+  }
 
   return (
     <div>
@@ -122,8 +149,6 @@ export default function Profile() {
 
       {/* Tabs */}
       <div className="tabs">
-        <button className={`tab ${tab === 'workouts' ? 'active' : ''}`}
-          onClick={() => setTab('workouts')}>Тренировки</button>
         <button className={`tab ${tab === 'notes' ? 'active' : ''}`}
           onClick={() => setTab('notes')}>Заметки</button>
         <button className={`tab ${tab === 'followers' ? 'active' : ''}`}
@@ -132,80 +157,58 @@ export default function Profile() {
           onClick={() => setTab('following')}>Подписки</button>
       </div>
 
-      {/* Workouts */}
-      {tab === 'workouts' && (
-        <div className="section">
-          {cycles.length > 0 ? cycles.map(c => (
-            <div className="card own-card" key={c.id}>
-              <div className="own-card-head">
-                <h3>
-                  {c.name}
-                  <span className={`badge ${c.is_public ? 'badge-pub' : 'badge-priv'}`}>
-                    {c.is_public ? 'Публичная' : 'Приватная'}
-                  </span>
-                </h3>
-                <div className="dot-menu-wrap">
-                  <button className="dot-menu-btn" onClick={() => setMenuOpen(menuOpen === c.id ? null : c.id)}>⋮</button>
-                  {menuOpen === c.id && (
-                    <div className="dot-menu-dropdown">
-                      <button onClick={() => deleteCycle(c.name)}>Удалить</button>
-                    </div>
-                  )}
-                </div>
-              </div>
-              <div className="card-meta">
-                {c.days_count} дн · пауза {c.pause} дн · с {c.start_at}
-              </div>
-              {c.original_author && (
-                <div className="original-author">
-                  от <Link to={`/user/${c.original_author}`}>@{c.original_author}</Link>
-                </div>
-              )}
-              {c.descriptions?.length > 0 && (
-                <ul className="card-desc" style={{ marginTop: 8 }}>
-                  {c.descriptions.map((d, i) => (
-                    <li key={i} dangerouslySetInnerHTML={{ __html: d }} />
-                  ))}
-                </ul>
-              )}
-              <div className="own-card-actions">
-                {!c.original_author && (
-                  <button className="btn btn-sm btn-outline"
-                    onClick={() => togglePublish(c)}>
-                    {c.is_public ? '🔒 Скрыть' : '🌐 Опубликовать'}
-                  </button>
-                )}
-                <button className="btn btn-sm btn-outline"
-                  onClick={() => nav('/analytics', { state: { cycleName: c.name } })}>
-                  📊 Анализ
-                </button>
-              </div>
-            </div>
-          )) : (
-            <div className="empty">
-              <p>Нет тренировок</p>
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* Notes */}
+      {/* Notes as tweets */}
       {tab === 'notes' && (
         <div className="section">
-          {notes.length > 0 ? notes.map((n, i) => (
-            <div className="card" key={i} style={{ padding: 16 }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <div className="note-title">{n.name}</div>
-                <div className="dot-menu-wrap">
-                  <button className="dot-menu-btn" onClick={() => setMenuOpen(menuOpen === `n${i}` ? null : `n${i}`)}>⋮</button>
-                  {menuOpen === `n${i}` && (
+          {notes.length > 0 ? notes.map(n => (
+            <div className="tweet-card" key={n.id}>
+              <div className="tweet-head">
+                <div className="avatar" style={{ width: 36, height: 36, fontSize: 13 }}>{user.username[0]}</div>
+                <div className="tweet-author">
+                  <span className="tweet-name">{user.username}</span>
+                  <span className="tweet-time">{timeAgo(n.created_at)}</span>
+                </div>
+                <div className="dot-menu-wrap" style={{ marginLeft: 'auto' }}>
+                  <button className="dot-menu-btn"
+                    onClick={() => setMenuOpen(menuOpen === `n${n.id}` ? null : `n${n.id}`)}>⋮</button>
+                  {menuOpen === `n${n.id}` && (
                     <div className="dot-menu-dropdown">
-                      <button onClick={() => { setMenuOpen(null); deleteNote(n.name) }}>Удалить</button>
+                      <button className="danger" onClick={() => deleteNote(n.name)}>Удалить</button>
                     </div>
                   )}
                 </div>
               </div>
-              <div className="note-body">{n.descriptions}</div>
+              <div className="tweet-body">{n.descriptions}</div>
+              <div className="tweet-actions">
+                <button className="comment-toggle-btn" onClick={() => toggleNoteComments(n.id)}>
+                  💬 {(noteComments[n.id] || []).length || ''}
+                </button>
+              </div>
+              {openComments[n.id] && (
+                <div className="comments-section">
+                  <form className="comment-form" onSubmit={(e) => submitNoteComment(e, n.id)}>
+                    <input
+                      className="comment-input"
+                      placeholder="Комментарий..."
+                      value={commentTexts[n.id] || ''}
+                      onChange={e => setCommentTexts(prev => ({ ...prev, [n.id]: e.target.value }))}
+                    />
+                    <button type="submit" className="comment-send"
+                      disabled={!(commentTexts[n.id] || '').trim()}>→</button>
+                  </form>
+                  {(noteComments[n.id] || []).length > 0 ? (noteComments[n.id]).map(c => (
+                    <div className="comment-item" key={c.id}>
+                      <Link to={`/user/${c.user}`} className="comment-user">{c.user}</Link>
+                      <span className="comment-text">{c.text}</span>
+                      {c.user === user.username && (
+                        <button className="comment-del" onClick={() => deleteComment(c.id, n.id)}>×</button>
+                      )}
+                    </div>
+                  )) : (
+                    <div className="comment-empty">Нет комментариев</div>
+                  )}
+                </div>
+              )}
             </div>
           )) : (
             <div className="empty">

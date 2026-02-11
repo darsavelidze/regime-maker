@@ -1,8 +1,21 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { post, auth } from '../api'
 import WorkoutCard from '../components/WorkoutCard'
+
+const RECENT_KEY = 'in_recent_searches'
+const MAX_RECENT = 8
+
+function getRecent() {
+  try { return JSON.parse(localStorage.getItem(RECENT_KEY) || '[]') } catch { return [] }
+}
+function saveRecent(q) {
+  const list = getRecent().filter(x => x !== q)
+  list.unshift(q)
+  localStorage.setItem(RECENT_KEY, JSON.stringify(list.slice(0, MAX_RECENT)))
+}
+function clearRecent() { localStorage.removeItem(RECENT_KEY) }
 
 export default function Explore() {
   const { user } = useAuth()
@@ -11,15 +24,18 @@ export default function Explore() {
   const [cycleResults, setCycleResults] = useState(null)
   const [userResults, setUserResults] = useState(null)
   const [loading, setLoading] = useState(false)
+  const [recent, setRecent] = useState(getRecent)
 
-  const search = async (e) => {
-    e?.preventDefault()
-    if (!query.trim()) return
+  const search = async (q) => {
+    const term = (q || query).trim()
+    if (!term) return
+    saveRecent(term)
+    setRecent(getRecent())
     setLoading(true)
     try {
       const [cycles, users] = await Promise.all([
-        post('/search_cycles/', auth(user, { query })),
-        post('/search_users/', auth(user, { query })),
+        post('/search_cycles/', auth(user, { query: term })),
+        post('/search_users/', auth(user, { query: term })),
       ])
       setCycleResults(cycles.cycles || [])
       setUserResults(users.users || [])
@@ -29,6 +45,12 @@ export default function Explore() {
     }
     finally { setLoading(false) }
   }
+
+  const handleSubmit = (e) => { e?.preventDefault(); search() }
+
+  const pickRecent = (q) => { setQuery(q); search(q) }
+
+  const doClean = () => { clearRecent(); setRecent([]) }
 
   const toggleIn = async (cycle) => {
     const endpoint = cycle.is_in ? '/unlike_cycle/' : '/like_cycle/'
@@ -47,7 +69,7 @@ export default function Explore() {
   return (
     <div>
       <div className="search-bar">
-        <form onSubmit={search}>
+        <form onSubmit={handleSubmit}>
           <input
             className="search-input"
             placeholder="Поиск тренировок и пользователей..."
@@ -56,6 +78,23 @@ export default function Explore() {
           />
         </form>
       </div>
+
+      {/* Recent searches */}
+      {!hasResults && !loading && recent.length > 0 && (
+        <div className="section">
+          <div className="section-title">
+            <span>Недавние</span>
+            <button className="btn btn-sm btn-outline" onClick={doClean}>Очистить</button>
+          </div>
+          <div className="recent-chips">
+            {recent.map(q => (
+              <button key={q} className="recent-chip" onClick={() => pickRecent(q)}>
+                {q}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
 
       {hasResults && !loading && (
         <div className="search-tabs">

@@ -37,7 +37,12 @@ from schemas import (
     MonthRequest,
     CloneCycleRequest,
     AnalyticsPublicRequest,
+    CommentCreate,
+    CommentDelete,
+    CommentsRequest,
+    InUsersRequest,
 )
+from data.comments import Comment
 import calendar as cal_mod
 from auth import hash_password, authenticate_user
 
@@ -102,8 +107,6 @@ def _cycle_to_dict(cycle: Cycle, db: Session, current_user: str = "") -> dict:
             .first()
             is not None
         )
-    author = db.query(User).filter(User.username == cycle.user).first()
-    followers_count = db.query(Follow).filter(Follow.following == cycle.user).count()
     return {
         "id": cycle.id,
         "name": cycle.name,
@@ -119,10 +122,52 @@ def _cycle_to_dict(cycle: Cycle, db: Session, current_user: str = "") -> dict:
         "is_in": is_in,
         "author": {
             "username": cycle.user,
-            "bio": getattr(author, "bio", "") or "" if author else "",
-            "followers_count": followers_count,
+            "bio": "",
+            "followers_count": 0,
         },
     }
+
+
+def _cycles_to_dicts(cycles: list, db: Session, current_user: str = "") -> list:
+    """Batch-convert cycles with optimized queries."""
+    from sqlalchemy import func
+    if not cycles:
+        return []
+    cycle_ids = [c.id for c in cycles]
+    # Batch count likes
+    counts = dict(
+        db.query(Like.cycle_id, func.count(Like.id))
+        .filter(Like.cycle_id.in_(cycle_ids))
+        .group_by(Like.cycle_id)
+        .all()
+    )
+    # Batch check user's likes
+    user_likes = set()
+    if current_user:
+        user_likes = {
+            row.cycle_id for row in
+            db.query(Like.cycle_id)
+            .filter(Like.cycle_id.in_(cycle_ids), Like.user == current_user)
+            .all()
+        }
+    result = []
+    for c in cycles:
+        result.append({
+            "id": c.id,
+            "name": c.name,
+            "user": c.user,
+            "days_count": c.days_count,
+            "pause": c.pause,
+            "descriptions": c.descriptions,
+            "data": c.data,
+            "start_at": c.start_at,
+            "is_public": bool(getattr(c, "is_public", 0)),
+            "original_author": getattr(c, "original_author", "") or "",
+            "ins_count": counts.get(c.id, 0),
+            "is_in": c.id in user_likes,
+            "author": {"username": c.user, "bio": "", "followers_count": 0},
+        })
+    return result
 
 
 # ======================== AUTH ========================
@@ -300,18 +345,25 @@ async def month_duties(body: MonthRequest, db: Session = Depends(get_db)):
 async def create_note(body: NoteCreate, db: Session = Depends(get_db)):
     """Create a new note for the user."""
     authenticate_user(body.user, body.password, db)
-    if db.query(Note).filter(Note.user == body.user, Note.name == body.name).first():
-        raise HTTPException(status_code=409, detail="You already have this note name.")
-    db.add(Note(name=body.name, user=body.user, descriptions=body.descriptions))
+    import uuid
+    note_name = body.name if body.name.strip() else f"note_{uuid.uuid4().hex[:8]}"
+    if db.query(Note).filter(Note.user == body.user, Note.name == note_name).first():
+        note_name = f"{note_name}_{uuid.uuid4().hex[:6]}"
+    db.add(Note(name=note_name, user=body.user, descriptions=body.descriptions))
     db.commit()
-    return {"verdict": f"You successful create new note with name: {body.name}"}
+    return {"verdict": f"Note created."}
 
 
 @app.post("/get_notes/")
 async def get_notes(body: NotesRequest, db: Session = Depends(get_db)):
     """Get all notes for a user."""
     authenticate_user(body.user, body.password, db)
-    return {"verdict": "Successful getting notes.", "notes": list(db.query(Note).filter(Note.user == body.user))}
+    notes = list(db.query(Note).filter(Note.user == body.user).order_by(Note.id.desc()))
+    return {"verdict": "Successful getting notes.", "notes": [{
+        "id": n.id, "name": n.name, "user": n.user,
+        "descriptions": n.descriptions,
+        "created_at": n.created_at.isoformat() if getattr(n, 'created_at', None) else "",
+    } for n in notes]}
 
 
 @app.post("/delete_note/")
@@ -581,16 +633,18 @@ async def feed(body: FeedRequest, db: Session = Depends(get_db)):
     from sqlalchemy import func
     authenticate_user(body.user, body.password, db)
     following = [f.following for f in db.query(Follow).filter(Follow.follower == body.user)]
+    sources = following + [body.user]  # include own published
     if following:
         cycles = (
             db.query(Cycle)
-            .filter(Cycle.user.in_(following), Cycle.is_public == 1)
+            .filter(Cycle.user.in_(sources), Cycle.is_public == 1)
             .order_by(Cycle.id.desc())
             .limit(50)
             .all()
         )
     else:
-        # No subscriptions — show global top by IN count
+        # No subscriptions — show global top by IN count + own published
+        from sqlalchemy import or_
         cycles = (
             db.query(Cycle)
             .outerjoin(Like, Like.cycle_id == Cycle.id)
@@ -600,7 +654,7 @@ async def feed(body: FeedRequest, db: Session = Depends(get_db)):
             .limit(50)
             .all()
         )
-    result = [_cycle_to_dict(c, db, body.user) for c in cycles]
+    result = _cycles_to_dicts(cycles, db, body.user)
     return {"verdict": f"Feed loaded. {len(result)} cycles.", "cycles": result}
 
 
@@ -621,7 +675,7 @@ async def search_cycles(body: SearchRequest, db: Session = Depends(get_db)):
         query = query.filter(Cycle.name.ilike(f"%{q}%"))
     cycles = query.order_by(Cycle.id.desc()).limit(50).all()
 
-    result = [_cycle_to_dict(c, db, current_user) for c in cycles]
+    result = _cycles_to_dicts(cycles, db, current_user)
     return {"verdict": f"Found {len(result)} cycles.", "cycles": result}
 
 
@@ -795,7 +849,7 @@ async def get_profile(username: str, db: Session = Depends(get_db)):
     public_cycles = db.query(Cycle).filter(
         Cycle.user == username, Cycle.is_public == 1
     ).all()
-    cycles_data = [_cycle_to_dict(c, db) for c in public_cycles]
+    cycles_data = _cycles_to_dicts(public_cycles, db)
 
     return {
         "username": username,
@@ -818,6 +872,65 @@ async def update_profile(body: UpdateProfileRequest, db: Session = Depends(get_d
     db.commit()
     logger.info("Profile updated: %s", body.user)
     return {"verdict": "Profile updated."}
+
+
+# ======================== COMMENTS ========================
+
+
+@app.post("/create_comment/")
+async def create_comment(body: CommentCreate, db: Session = Depends(get_db)):
+    """Create a comment on a cycle or note."""
+    authenticate_user(body.user, body.password, db)
+    if body.target_type not in ("cycle", "note"):
+        raise HTTPException(status_code=400, detail="target_type must be 'cycle' or 'note'.")
+    comment = Comment(
+        user=body.user,
+        target_type=body.target_type,
+        target_id=body.target_id,
+        text=body.text,
+    )
+    db.add(comment)
+    db.commit()
+    return {"verdict": "Comment created.", "comment": {
+        "id": comment.id, "user": comment.user,
+        "text": comment.text,
+        "created_at": comment.created_at.isoformat() if comment.created_at else "",
+    }}
+
+
+@app.post("/delete_comment/")
+async def delete_comment(body: CommentDelete, db: Session = Depends(get_db)):
+    """Delete own comment."""
+    authenticate_user(body.user, body.password, db)
+    comment = db.query(Comment).filter(Comment.id == body.comment_id, Comment.user == body.user).first()
+    if not comment:
+        raise HTTPException(status_code=404, detail="Comment not found or not yours.")
+    db.delete(comment)
+    db.commit()
+    return {"verdict": "Comment deleted."}
+
+
+@app.post("/get_comments/")
+async def get_comments(body: CommentsRequest, db: Session = Depends(get_db)):
+    """Get comments for a cycle or note."""
+    comments = (
+        db.query(Comment)
+        .filter(Comment.target_type == body.target_type, Comment.target_id == body.target_id)
+        .order_by(Comment.id.desc())
+        .limit(100)
+        .all()
+    )
+    return {"comments": [{
+        "id": c.id, "user": c.user, "text": c.text,
+        "created_at": c.created_at.isoformat() if c.created_at else "",
+    } for c in comments]}
+
+
+@app.post("/get_in_users/")
+async def get_in_users(body: InUsersRequest, db: Session = Depends(get_db)):
+    """Get list of users who IN'd a cycle."""
+    likes = db.query(Like).filter(Like.cycle_id == body.cycle_id).all()
+    return {"users": [l.user for l in likes]}
 
 
 # ======================== MAIN ========================

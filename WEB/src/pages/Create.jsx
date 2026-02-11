@@ -1,6 +1,12 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { useAuth } from '../context/AuthContext'
 import { post, auth } from '../api'
+
+/* helpers */
+const DAY_NAMES = ['Вс','Пн','Вт','Ср','Чт','Пт','Сб']
+const MON_NAMES = ['янв','фев','мар','апр','май','июн','июл','авг','сен','окт','ноя','дек']
+function addDays(d, n) { const r = new Date(d); r.setDate(r.getDate() + n); return r }
+function fmtShort(d) { return `${d.getDate()} ${MON_NAMES[d.getMonth()]}` }
 
 export default function Create() {
   const { user } = useAuth()
@@ -16,9 +22,9 @@ export default function Create() {
   const [startAt, setStartAt] = useState('')
   const [days, setDays] = useState({})
   const [activeDay, setActiveDay] = useState(1)
+  const [periodic, setPeriodic] = useState(false)
 
   // Note state
-  const [noteName, setNoteName] = useState('')
   const [noteText, setNoteText] = useState('')
 
   useEffect(() => {
@@ -78,15 +84,31 @@ export default function Create() {
     setError('')
     setMsg('')
     try {
-      await post('/create_note/', auth(user, { name: noteName, descriptions: noteText }))
+      await post('/create_note/', auth(user, { name: '', descriptions: noteText }))
       setMsg('Заметка создана!')
-      setNoteName(''); setNoteText('')
+      setNoteText('')
     } catch (err) {
       setError(err.message)
     }
   }
 
   const dayKey = `day${activeDay}`
+
+  /* compute 3-week schedule preview */
+  const schedulePreview = useMemo(() => {
+    if (!startAt) return []
+    const start = new Date(startAt + 'T00:00:00')
+    if (isNaN(start)) return []
+    const period = daysCount + pause
+    const items = []
+    for (let i = 0; i < 21; i++) {
+      const date = addDays(start, i)
+      const idx = i % period
+      const isTraining = idx < daysCount
+      items.push({ date, dayNum: isTraining ? idx + 1 : 0, isTraining })
+    }
+    return items
+  }, [startAt, daysCount, pause])
 
   return (
     <div>
@@ -108,23 +130,62 @@ export default function Create() {
             <label className="form-label">Название</label>
             <input className="input" value={name} onChange={e => setName(e.target.value)} required />
           </div>
+
+          {/* periodic toggle */}
+          <label className="periodic-toggle" style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12, cursor: 'pointer' }}>
+            <input type="checkbox" checked={periodic} onChange={e => { setPeriodic(e.target.checked); if (!e.target.checked) setPause(0) }} />
+            <span style={{ fontSize: 14 }}>Периодичная тренировка</span>
+          </label>
+
           <div style={{ display: 'flex', gap: 12 }}>
             <div className="form-group" style={{ flex: 1 }}>
-              <label className="form-label">Дней</label>
+              <label className="form-label">Дней тренировок</label>
               <input className="input" type="number" min="1" max="7" value={daysCount}
                 onChange={e => setDaysCount(parseInt(e.target.value) || 1)} />
             </div>
-            <div className="form-group" style={{ flex: 1 }}>
-              <label className="form-label">Пауза (дн)</label>
-              <input className="input" type="number" min="0" value={pause}
-                onChange={e => setPause(parseInt(e.target.value) || 0)} />
-            </div>
+            {periodic && (
+              <div className="form-group" style={{ flex: 1 }}>
+                <label className="form-label">Дней отдыха</label>
+                <input className="input" type="number" min="0" value={pause}
+                  onChange={e => setPause(parseInt(e.target.value) || 0)} />
+              </div>
+            )}
           </div>
+
+          {periodic && pause > 0 && (
+            <div className="schedule-hint">
+              Цикл: {daysCount} дн. тренировок → {pause} дн. отдыха → повтор
+            </div>
+          )}
+
           <div className="form-group">
             <label className="form-label">Дата начала</label>
             <input className="input" type="date" value={startAt}
               onChange={e => setStartAt(e.target.value)} required />
           </div>
+
+          {/* schedule preview */}
+          {periodic && schedulePreview.length > 0 && (
+            <div className="schedule-preview">
+              <label className="form-label">Расписание на 3 недели</label>
+              <div className="schedule-grid">
+                {DAY_NAMES.map(d => <div key={d} className="schedule-hdr">{d}</div>)}
+                {/* pad first row to correct weekday */}
+                {schedulePreview.length > 0 && Array.from({ length: schedulePreview[0].date.getDay() }, (_, i) => (
+                  <div key={`pad${i}`} className="schedule-cell schedule-empty" />
+                ))}
+                {schedulePreview.map((s, i) => (
+                  <div key={i} className={`schedule-cell ${s.isTraining ? 'schedule-train' : 'schedule-rest'}`}
+                    title={s.isTraining ? `День ${s.dayNum}` : 'Отдых'}>
+                    <span className="schedule-date">{s.date.getDate()}</span>
+                    {s.isTraining
+                      ? <span className="schedule-day-label">Д{s.dayNum}</span>
+                      : <span className="schedule-rest-label">—</span>}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
 
           <label className="form-label">Упражнения по дням</label>
           <div className="day-tabs">
@@ -165,17 +226,13 @@ export default function Create() {
       {tab === 'note' && (
         <form onSubmit={submitNote} className="section">
           <div className="form-group">
-            <label className="form-label">Название</label>
-            <input className="input" value={noteName} onChange={e => setNoteName(e.target.value)} required />
-          </div>
-          <div className="form-group">
-            <label className="form-label">Содержание</label>
-            <textarea className="input" rows={6} value={noteText}
+            <label className="form-label">Что нового?</label>
+            <textarea className="input" rows={4} value={noteText}
               onChange={e => setNoteText(e.target.value)} required
-              placeholder="Текст заметки..." />
+              placeholder="Напишите что-нибудь..." />
           </div>
           <button className="btn btn-primary btn-block" type="submit">
-            Создать заметку
+            Опубликовать
           </button>
         </form>
       )}

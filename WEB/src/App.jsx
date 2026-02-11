@@ -8,6 +8,7 @@ import Explore from './pages/Explore'
 import Create from './pages/Create'
 import Day from './pages/Day'
 import Profile from './pages/Profile'
+import Workouts from './pages/Workouts'
 import UserProfile from './pages/UserProfile'
 import Analytics from './pages/Analytics'
 
@@ -26,6 +27,7 @@ export default function App() {
         <Route path="explore" element={<Explore />} />
         <Route path="create" element={<Create />} />
         <Route path="day" element={<Day />} />
+        <Route path="workouts" element={<Workouts />} />
         <Route path="profile" element={<Profile />} />
         <Route path="user/:username" element={<UserProfile />} />
         <Route path="analytics" element={<Analytics />} />
