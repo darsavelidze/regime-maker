@@ -35,7 +35,7 @@ export default function Feed() {
   if (!cycles.length) {
     return (
       <div className="empty">
-        <p style={{ fontSize: 40 }}>📭</p>
+        <p style={{ fontSize: 36 }}>📭</p>
         <p>Лента пуста</p>
         <p>Подпишитесь на пользователей или исследуйте тренировки</p>
       </div>
@@ -43,7 +43,7 @@ export default function Feed() {
   }
 
   return (
-    <div style={{ padding: '12px 0' }}>
+    <div className="section" style={{ paddingTop: 0 }}>
       {cycles.map(c => (
         <WorkoutCard key={c.id} cycle={c} onIn={toggleIn} showDate />
       ))}

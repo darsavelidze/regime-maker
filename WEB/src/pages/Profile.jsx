@@ -192,7 +192,7 @@ export default function Profile() {
           )) : (
             <div className="empty">
               <p>Нет публичных тренировок</p>
-              <Link to="/workouts" className="btn btn-sm btn-primary" style={{ marginTop: 8 }}>Мои тренировки</Link>
+              <Link to="/workouts" className="btn btn-sm btn-primary mt-12">Мои тренировки</Link>
             </div>
           )}
         </div>
@@ -204,7 +204,7 @@ export default function Profile() {
           {notes.length > 0 ? notes.map(n => (
             <div className="tweet-card" key={n.id}>
               <div className="tweet-head">
-                <div className="avatar" style={{ width: 36, height: 36, fontSize: 13 }}>{user.username[0]}</div>
+                <div className="avatar">{user.username[0]}</div>
                 <div className="tweet-author">
                   <span className="tweet-name">{user.username}</span>
                   <span className="tweet-time">{timeAgo(n.created_at)}</span>

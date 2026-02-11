@@ -121,7 +121,7 @@ export default function Create() {
         </button>
       </div>
 
-      {msg && <div style={{ padding: 16, color: 'var(--green)', textAlign: 'center', fontWeight: 600 }}>{msg}</div>}
+      {msg && <div className="success-msg">{msg}</div>}
       {error && <div className="error" style={{ padding: 16 }}>{error}</div>}
 
       {tab === 'workout' && (
@@ -132,12 +132,12 @@ export default function Create() {
           </div>
 
           {/* periodic toggle */}
-          <label className="periodic-toggle" style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12, cursor: 'pointer' }}>
+          <label className="periodic-toggle">
             <input type="checkbox" checked={periodic} onChange={e => { setPeriodic(e.target.checked); if (!e.target.checked) setPause(0) }} />
-            <span style={{ fontSize: 14 }}>Периодичная тренировка</span>
+            <span>Периодичная тренировка</span>
           </label>
 
-          <div style={{ display: 'flex', gap: 12 }}>
+          <div className="actions-row">
             <div className="form-group" style={{ flex: 1 }}>
               <label className="form-label">Дней тренировок</label>
               <input className="input" type="number" min="1" max="7" value={daysCount}
@@ -198,7 +198,7 @@ export default function Create() {
             ))}
           </div>
 
-          <div style={{ margin: '12px 0' }}>
+          <div className="mt-12 mb-8">
             {(days[dayKey] || []).map((ex, i) => (
               <div className="ex-item" key={i}>
                 <div className="ex-info">
@@ -209,8 +209,8 @@ export default function Create() {
               </div>
             ))}
             {!(days[dayKey] || []).length && (
-              <div style={{ textAlign: 'center', padding: 16, color: 'var(--text-2)', fontSize: 14 }}>
-                Нет упражнений
+              <div className="empty">
+                <p>Нет упражнений</p>
               </div>
             )}
           </div>

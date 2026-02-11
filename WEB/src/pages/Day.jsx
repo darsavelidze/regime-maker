@@ -140,7 +140,7 @@ export default function Day() {
       {!dayLoading && duties !== null && (
         entries.length > 0 ? (
           <>
-            <div style={{ marginBottom: 12, fontSize: 13, color: 'var(--text-2)' }}>
+            <div className="card-meta mb-8">
               Выполнено {done} из {entries.length}
             </div>
             {entries.map(([name, completed]) => (

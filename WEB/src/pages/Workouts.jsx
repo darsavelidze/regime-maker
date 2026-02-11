@@ -75,7 +75,7 @@ export default function Workouts() {
               </div>
             )}
             {c.descriptions?.length > 0 && (
-              <ul className="card-desc" style={{ marginTop: 8 }}>
+              <ul className="card-desc mt-12">
                 {c.descriptions.map((d, i) => (
                   <li key={i} dangerouslySetInnerHTML={{ __html: d }} />
                 ))}
@@ -97,7 +97,7 @@ export default function Workouts() {
         )) : (
           <div className="empty">
             <p>Нет тренировок</p>
-            <button className="btn btn-primary" onClick={() => nav('/create')} style={{ marginTop: 12 }}>
+            <button className="btn btn-primary mt-12" onClick={() => nav('/create')}>
               Создать тренировку
             </button>
           </div>

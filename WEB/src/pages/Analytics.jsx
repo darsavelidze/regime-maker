@@ -34,7 +34,7 @@ export default function Analytics() {
       </div>
 
       {loading && <div className="spinner">Загрузка...</div>}
-      {error && <div className="error" style={{ padding: 16 }}>{error}</div>}
+      {error && <div className="error section">{error}</div>}
 
       {data && (
         <div className="section">

@@ -112,7 +112,7 @@ export default function Explore() {
       {loading && <div className="spinner">Поиск...</div>}
 
       {hasResults && !loading && searchTab === 'workouts' && (
-        <div style={{ padding: '0 0 12px' }}>
+        <div className="section" style={{ paddingTop: 0 }}>
           {cycleResults.length > 0 ? (
             cycleResults.map(c => (
               <WorkoutCard key={c.id} cycle={c} onIn={toggleIn} />
@@ -124,7 +124,7 @@ export default function Explore() {
       )}
 
       {hasResults && !loading && searchTab === 'users' && (
-        <div style={{ padding: '0 0 12px' }}>
+        <div className="section" style={{ paddingTop: 0 }}>
           {userResults.length > 0 ? (
             userResults.map(u => (
               <Link to={`/user/${u.username}`} key={u.username} className="user-list-item">
@@ -146,7 +146,7 @@ export default function Explore() {
 
       {!hasResults && !loading && (
         <div className="empty">
-          <p style={{ fontSize: 40 }}>🔍</p>
+          <p style={{ fontSize: 36 }}>🔍</p>
           <p>Найдите тренировки и пользователей</p>
           <p>Нажмите Enter для поиска</p>
         </div>
