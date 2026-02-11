@@ -2,11 +2,12 @@ import { useState, useEffect, useCallback } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { post, get, auth } from '../api'
+import WorkoutCard from '../components/WorkoutCard'
 
 export default function Profile() {
   const { user, logout } = useAuth()
   const nav = useNavigate()
-  const [tab, setTab] = useState('notes')
+  const [tab, setTab] = useState('workouts')
   const [profile, setProfile] = useState(null)
   const [notes, setNotes] = useState([])
   const [followers, setFollowers] = useState([])
@@ -149,6 +150,8 @@ export default function Profile() {
 
       {/* Tabs */}
       <div className="tabs">
+        <button className={`tab ${tab === 'workouts' ? 'active' : ''}`}
+          onClick={() => setTab('workouts')}>Тренировки</button>
         <button className={`tab ${tab === 'notes' ? 'active' : ''}`}
           onClick={() => setTab('notes')}>Заметки</button>
         <button className={`tab ${tab === 'followers' ? 'active' : ''}`}
@@ -156,6 +159,44 @@ export default function Profile() {
         <button className={`tab ${tab === 'following' ? 'active' : ''}`}
           onClick={() => setTab('following')}>Подписки</button>
       </div>
+
+      {/* Public workouts */}
+      {tab === 'workouts' && (
+        <div className="section">
+          {profile?.public_cycles?.length > 0 ? profile.public_cycles.map(c => (
+            <div key={c.id}>
+              <WorkoutCard cycle={c} showAuthor={false}
+                onIn={async (cycle) => {
+                  const endpoint = cycle.is_in ? '/unlike_cycle/' : '/like_cycle/'
+                  try {
+                    const res = await post(endpoint, auth(user, { cycle_id: cycle.id }))
+                    setProfile(prev => ({
+                      ...prev,
+                      public_cycles: prev.public_cycles.map(cc =>
+                        cc.id === cycle.id
+                          ? { ...cc, is_in: !cc.is_in, ins_count: res.ins_count }
+                          : cc
+                      ),
+                    }))
+                  } catch {}
+                }} />
+              <div className="card-extra-actions">
+                <button className="btn btn-sm btn-outline"
+                  onClick={() => nav('/analytics', {
+                    state: { cycleName: c.name, targetUser: user.username }
+                  })}>
+                  📊 Анализ
+                </button>
+              </div>
+            </div>
+          )) : (
+            <div className="empty">
+              <p>Нет публичных тренировок</p>
+              <Link to="/workouts" className="btn btn-sm btn-primary" style={{ marginTop: 8 }}>Мои тренировки</Link>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Notes as tweets */}
       {tab === 'notes' && (
