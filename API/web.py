@@ -1,16 +1,127 @@
 import json
-import sqlite3
 import datetime
-from fastapi import FastAPI, Request
+import logging
+
+from fastapi import FastAPI, Depends, HTTPException, status
+from fastapi.exceptions import RequestValidationError
+from fastapi.responses import JSONResponse
+from fastapi.middleware.cors import CORSMiddleware
+from sqlalchemy.orm import Session
 import uvicorn
+
 from data import db_session
 from data.users import User
 from data.cycles import Cycle
 from data.notes import Note
+from data.follows import Follow
+from data.likes import Like
 from data.muscles import MUSCLE_GROUPS
+from schemas import (
+    UserAuth,
+    SignUpRequest,
+    CycleCreate,
+    CycleDelete,
+    UserCyclesRequest,
+    DayRequest,
+    DutyRequest,
+    NoteCreate,
+    NoteDelete,
+    NotesRequest,
+    AnalyticsRequest,
+    PublishCycleRequest,
+    FollowRequest,
+    LikeCycleRequest,
+    UpdateProfileRequest,
+    FeedRequest,
+    SearchRequest,
+)
+from auth import hash_password, authenticate_user
 
-app = FastAPI()
+# --------------- Logging ---------------
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+)
+logger = logging.getLogger("regime-maker")
+
+# --------------- App ---------------
+
+app = FastAPI(title="RegimeMaker API", version="3.0.0")
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 db_session.global_init("db/db.db")
+
+
+# --------------- Exception Handlers ---------------
+
+
+@app.exception_handler(HTTPException)
+async def http_exception_handler(request, exc):
+    return JSONResponse(status_code=exc.status_code, content={"error": exc.detail})
+
+
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(request, exc):
+    errors = exc.errors()
+    msg = errors[0].get("msg", "Validation error") if errors else "Validation error"
+    return JSONResponse(status_code=422, content={"error": msg})
+
+
+# --------------- Dependencies ---------------
+
+
+def get_db():
+    session = db_session.create_session()
+    try:
+        yield session
+    finally:
+        session.close()
+
+
+# --------------- Helpers ---------------
+
+
+def _cycle_to_dict(cycle: Cycle, db: Session, current_user: str = "") -> dict:
+    """Convert a Cycle ORM object to a response dict with social stats."""
+    likes_count = db.query(Like).filter(Like.cycle_id == cycle.id).count()
+    is_liked = False
+    if current_user:
+        is_liked = (
+            db.query(Like)
+            .filter(Like.cycle_id == cycle.id, Like.user == current_user)
+            .first()
+            is not None
+        )
+    author = db.query(User).filter(User.username == cycle.user).first()
+    followers_count = db.query(Follow).filter(Follow.following == cycle.user).count()
+    return {
+        "id": cycle.id,
+        "name": cycle.name,
+        "user": cycle.user,
+        "days_count": cycle.days_count,
+        "pause": cycle.pause,
+        "descriptions": cycle.descriptions,
+        "data": cycle.data,
+        "start_at": cycle.start_at,
+        "is_public": bool(getattr(cycle, "is_public", 0)),
+        "likes_count": likes_count,
+        "is_liked": is_liked,
+        "author": {
+            "username": cycle.user,
+            "bio": getattr(author, "bio", "") or "" if author else "",
+            "followers_count": followers_count,
+        },
+    }
+
+
+# ======================== AUTH ========================
+
 
 @app.get("/")
 def index():
@@ -18,651 +129,495 @@ def index():
 
 
 @app.post("/user/")
-async def user(request: Request):
-    body = await request.body()
-
-    data = json.loads(body)
-    username = data.get("username")
-    password = data.get("password")
-    if not username or not password or not username.strip() or not password.strip():
-        return {"error": "Username and password are required params."}
-
-    try:
-        db_sess = db_session.create_session()
-        users = [user.username for user in db_sess.query(User).all()]
-        if username not in users:
-            return {"error": "This user does not exist."}
-        user_password = db_sess.query(User).filter(User.username == username).first().password
-        if password != user_password:
-            return {"error": f"Invalid password."}
-    except sqlite3.IntegrityError as e:
-        return {"error": f"{e}"}
-    except Exception as e:
-        return {"error": f"{e}"}
-
+async def user(body: UserAuth, db: Session = Depends(get_db)):
+    """Verify that a user exists and credentials are valid."""
+    authenticate_user(body.username, body.password, db)
+    logger.info("User login: %s", body.username)
     return {"verdict": "This user exists."}
 
 
-# REGISTRATION
 @app.post("/sign_up/")
-async def sign_up(request: Request):
-    body = await request.body()
-
-    data = json.loads(body)
-    username = data.get("username")
-    password = data.get("password")
-    if not username or not password or not username.strip() or not password.strip():
-        return {"error": "Username and password are required params."}
-    if len(password) <= 3:
-        return {"error": "Short password."}
-
-    try:
-        db_sess = db_session.create_session()
-        users = [user.username for user in db_sess.query(User).all()]
-        if username in users:
-            return {"error": "This name is already taken"}
-        new_user = User()
-        new_user.username = username
-        new_user.password = password
-        new_user.days = {}
-        db_sess.add(new_user)
-        db_sess.commit()
-        db_sess.close()
-    except sqlite3.IntegrityError as e:
-        return {"error": f"{e}"}
-    except Exception as e:
-        return {"error": f"{e}"}
-
-    return {"verdict": f"You successful sign up with username: {username}."}
+async def sign_up(body: SignUpRequest, db: Session = Depends(get_db)):
+    """Register a new user with a hashed password."""
+    existing = db.query(User).filter(User.username == body.username).first()
+    if existing:
+        raise HTTPException(status_code=409, detail="This name is already taken.")
+    new_user = User(
+        username=body.username,
+        password=hash_password(body.password),
+        days={},
+        bio="",
+    )
+    db.add(new_user)
+    db.commit()
+    logger.info("New user registered: %s", body.username)
+    return {"verdict": f"You successful sign up with username: {body.username}."}
 
 
-# CREATING_SYSTEM
+# ======================== CYCLES ========================
+
+
 @app.post("/create_cycle/")
-async def create_cycle(request: Request):
-    body = await request.body()
-
-    data = json.loads(body)
-    name = data.get("name")
-    user = data.get("user")
-    days_count = int(data.get("days_count"))
-    pause = int(data.get("pause"))
-    descriptions = data.get("descriptions")
-    data_cycle = data.get("data_cycle")
-    password = data.get("password")
-    start_at = data.get("start_at")
-
+async def create_cycle(body: CycleCreate, db: Session = Depends(get_db)):
+    """Create a new training cycle for the user."""
     try:
-        format_string = "%Y-%m-%d"
-        date = datetime.datetime.strptime(start_at, format_string).date()
-    except Exception as e:
-        print(f"Error start_at: {e}")
-        return {"error": "Invalid start_at."}
-    if not name:
-        return {"error": "Name is required parameter."}
-    if not password:
-        return {"error": "Password is required parameter."}
-    if not days_count:
-        return {"error": "Days_count is required parameter."}
-    if not descriptions:
-        return {"error": "Description is required parameter."}
-    if not data_cycle:
-        return {"error": "Data_cycle is required parameter."}
-    if days_count != len(descriptions):
-        return {"error": "Invalid count elements in descriptions."}
-    if pause < 0:
-        return {"error": "Negative pause."}
-    try:
-        db_sess = db_session.create_session()
-        users = [user.username for user in db_sess.query(User).all()]
-        if user not in users:
-            return {"error": "Invalid user."}
-        user_password = db_sess.query(User).filter(User.username == user).first().password
-        if password != user_password:
-            return {"error": f"Invalid password."}
-        user_cycles = [c.name for c in db_sess.query(Cycle).filter(Cycle.user == user)]
-        if name in user_cycles:
-            return {"error": "You already have this cycle name."}
-        new_cycle = Cycle()
-        new_cycle.name = name
-        new_cycle.user = user
-        new_cycle.days_count = days_count
-        new_cycle.pause = pause
-        new_cycle.descriptions = descriptions
-        # print(descriptions)
-        new_cycle.data = data_cycle
-        new_cycle.start_at = start_at
-        db_sess.add(new_cycle)
-        db_sess.commit()
-        db_sess.close()
-    except sqlite3.IntegrityError as e:
-        print(e)
-        return {"error": f"{e}"}
-    except Exception as e:
-        print(e)
-        return {"error": f"{e}"}
-    return {"verdict": f"You successful create new cycle with name: {name}"}
-
-
-# TODAY
-@app.post("/day/")
-async def day(request: Request):
-    body = await request.body()
-
-    data = json.loads(body)
-    user = data.get("user")
-    day = data.get("day")
-    password = data.get("password")
-
-    if not user:
-        return {"error": "User is required parameter."}
-    if not password:
-        return {"error": "Password is required parameter."}
-    if not day:
-        return {"error": "Day is required parameter."}
-    try:
-        db_sess = db_session.create_session()
-
-        user_obj = db_sess.query(User).filter(User.username == user).first()
-
-        users = [user.username for user in db_sess.query(User).all()]
-        if user not in users:
-            return {"error": "Invalid user."}
-        user_password = user_obj.password
-        if password != user_password:
-            return {"error": f"Invalid password."}
-        # -------------------------------
-        format_string = "%Y-%m-%d"
-        date = datetime.datetime.strptime(day, format_string).date()
-
-        duties = {}
-        for cycle in db_sess.query(Cycle).filter(Cycle.user == user).all():
-            date_cycle = cycle.start_at
-            # print(date_cycle)
-            date_cycle = datetime.datetime.strptime(date_cycle, format_string).date()
-            days = date - date_cycle
-            days = days.days
-            dd = int(days) % (int(cycle.days_count) + int(cycle.pause))
-            descriptions = cycle.descriptions
-            # print(descriptions, dd)
-            try:
-                duties[descriptions[abs(dd)]] = 0
-            except IndexError as e:
-                print(e)
-        # print(duties)
-        # print("AHAHAAHAHHAHAAHHAHAAHHAAHHAAHAHAHAAHAH")
-        if day not in user_obj.days:
-            user_days = user_obj.days.copy()
-            user_days[day] = duties
-            user_obj.days = user_days.copy()
-            db_sess.commit()
-            db_sess.close()
-            return {"verdict": "Successful getting duties.", "duties": duties}
-        else:
-            user_duties = user_obj.days[day].copy()
-            for i in duties:
-                if i in user_duties:
-                    duties[i] = user_duties[i]
-            # print(duties)
-            user_days = user_obj.days.copy()
-            user_days[day] = duties
-            user_obj.days = user_days.copy()
-            db_sess.commit()
-            db_sess.close()
-            return {"verdict": "Successful getting duties.", "duties": duties}
-
-        # -------------------------------
-    except sqlite3.IntegrityError as e:
-        print(e)
-        return {"error": f"{e}"}
-    except Exception as e:
-        print(e)
-        return {"error": f"{e}"}
+        datetime.datetime.strptime(body.start_at, "%Y-%m-%d")
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid start_at date format. Use YYYY-MM-DD.")
+    if body.days_count != len(body.descriptions):
+        raise HTTPException(status_code=400, detail="Invalid count elements in descriptions.")
+    authenticate_user(body.user, body.password, db)
+    if db.query(Cycle).filter(Cycle.user == body.user, Cycle.name == body.name).first():
+        raise HTTPException(status_code=409, detail="You already have this cycle name.")
+    new_cycle = Cycle(
+        name=body.name,
+        user=body.user,
+        days_count=body.days_count,
+        pause=body.pause,
+        descriptions=body.descriptions,
+        data=body.data_cycle,
+        start_at=body.start_at,
+        is_public=0,
+    )
+    db.add(new_cycle)
+    db.commit()
+    logger.info("Cycle created: %s by %s", body.name, body.user)
+    return {"verdict": f"You successful create new cycle with name: {body.name}"}
 
 
 @app.post("/delete_cycle/")
-async def delete_cycle(request: Request):
-    body = await request.body()
-
-    data = json.loads(body)
-    cycle_name = data.get("cycle_name")
-    user = data.get("user")
-    password = data.get("password")
-
-    if not user:
-        return {"error": "User is required parameter."}
-    if not password:
-        return {"error": "Password is required parameter."}
-    try:
-        db_sess = db_session.create_session()
-        users = [user.username for user in db_sess.query(User).all()]
-        if user not in users:
-            return {"error": "Invalid user."}
-        user_password = db_sess.query(User).filter(User.username == user).first().password
-        if password != user_password:
-            return {"error": f"Invalid password."}
-        user_cycles = [c.name for c in db_sess.query(Cycle).filter(Cycle.user == user)]
-        if cycle_name not in user_cycles:
-            return {"error": f"You have not with cycle. Your cycles: {user_cycles}"}
-
-        db_sess.query(Cycle).filter(Cycle.name == cycle_name).delete()
-        db_sess.commit()
-        db_sess.close()
-
-        return {"verdict": f"Successful delete cycle: {cycle_name}"}
-
-    except sqlite3.IntegrityError as e:
-        print(e)
-        return {"error": f"{e}"}
-    except Exception as e:
-        print(e)
-        return {"error": f"{e}"}
+async def delete_cycle(body: CycleDelete, db: Session = Depends(get_db)):
+    """Delete a training cycle and its associated likes."""
+    authenticate_user(body.user, body.password, db)
+    cycle = db.query(Cycle).filter(Cycle.user == body.user, Cycle.name == body.cycle_name).first()
+    if not cycle:
+        user_cycles = [c.name for c in db.query(Cycle).filter(Cycle.user == body.user)]
+        raise HTTPException(status_code=404, detail=f"Cycle not found. Your cycles: {user_cycles}")
+    db.query(Like).filter(Like.cycle_id == cycle.id).delete()
+    db.delete(cycle)
+    db.commit()
+    logger.info("Cycle deleted: %s by %s", body.cycle_name, body.user)
+    return {"verdict": f"Successful delete cycle: {body.cycle_name}"}
 
 
 @app.post("/user_cycles/")
-async def get_cycles(request: Request):
-    body = await request.body()
+async def get_cycles(body: UserCyclesRequest, db: Session = Depends(get_db)):
+    """Get all training cycles for a user."""
+    authenticate_user(body.user, body.password, db)
+    user_cycles = list(db.query(Cycle).filter(Cycle.user == body.user))
+    return {"verdict": "Successful getting cycles.", "cycles": user_cycles}
 
-    data = json.loads(body)
 
-    user = data.get("user")
-    password = data.get("password")
+# ======================== DAY / DUTIES ========================
 
-    if not user:
-        return {"error": "User is required parameter."}
-    if not password:
-        return {"error": "Password is required parameter."}
+
+@app.post("/day/")
+async def day(body: DayRequest, db: Session = Depends(get_db)):
+    """Get or create the duty list for a specific day."""
+    user_obj = authenticate_user(body.user, body.password, db)
     try:
-        db_sess = db_session.create_session()
-        users = [user.username for user in db_sess.query(User).all()]
-        if user not in users:
-            return {"error": "Invalid user."}
-        user_password = db_sess.query(User).filter(User.username == user).first().password
-        if password != user_password:
-            return {"error": f"Invalid password."}
-        user_cycles = [c for c in db_sess.query(Cycle).filter(Cycle.user == user)]
-        # print(user_cycles)
-        # db_sess.commit()
-        # db_sess.close()
+        date = datetime.datetime.strptime(body.day, "%Y-%m-%d").date()
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid day format. Use YYYY-MM-DD.")
 
-        return {"verdict": "Successful getting cycles.", "cycles": user_cycles}
+    duties = {}
+    for cycle in db.query(Cycle).filter(Cycle.user == body.user).all():
+        cycle_date = datetime.datetime.strptime(cycle.start_at, "%Y-%m-%d").date()
+        days_diff = (date - cycle_date).days
+        day_index = days_diff % (cycle.days_count + cycle.pause)
+        try:
+            duties[cycle.descriptions[abs(day_index)]] = 0
+        except IndexError:
+            pass
 
-    except sqlite3.IntegrityError as e:
-        print(e)
-        return {"error": f"{e}"}
-    except Exception as e:
-        print(e)
-        return {"error": f"{e}"}
+    if body.day in user_obj.days:
+        existing = user_obj.days[body.day].copy()
+        for key in duties:
+            if key in existing:
+                duties[key] = existing[key]
 
-
-@app.post("/create_note/")
-async def create_note(request: Request):
-    body = await request.body()
-
-    data = json.loads(body)
-    name = data.get("name")
-    user = data.get("user")
-    descriptions = data.get("descriptions")
-    password = data.get("password")
-
-    if not name:
-        return {"error": "Name is required parameter."}
-    if not password:
-        return {"error": "Password is required parameter."}
-    if not descriptions:
-        return {"error": "Description is required parameter."}
-    if type(descriptions) is not str:
-        return {"error": "Invalid description."}
-    try:
-        db_sess = db_session.create_session()
-        users = [user.username for user in db_sess.query(User).all()]
-        if user not in users:
-            return {"error": "Invalid user."}
-        user_password = db_sess.query(User).filter(User.username == user).first().password
-        if password != user_password:
-            return {"error": f"Invalid password."}
-        user_notes = [c.name for c in db_sess.query(Note).filter(Note.user == user)]
-        if name in user_notes:
-            return {"error": "You already have this note name."}
-
-        # -----------------------------
-        new_note = Note()
-        new_note.name = name
-        new_note.user = user
-        new_note.descriptions = descriptions
-        db_sess.add(new_note)
-        db_sess.commit()
-        db_sess.close()
-        # -----------------------------
-
-    except sqlite3.IntegrityError as e:
-        print(e)
-        return {"error": f"{e}"}
-    except Exception as e:
-        print(e)
-        return {"error": f"{e}"}
-    return {"verdict": f"You successful create new note with name: {name}"}
-
-
-@app.post("/get_notes/")
-async def get_notes(request: Request):
-    body = await request.body()
-
-    data = json.loads(body)
-
-    user = data.get("user")
-    password = data.get("password")
-
-    if not user:
-        return {"error": "User is required parameter."}
-    if not password:
-        return {"error": "Password is required parameter."}
-    try:
-        db_sess = db_session.create_session()
-        users = [user.username for user in db_sess.query(User).all()]
-        if user not in users:
-            return {"error": "Invalid user."}
-        user_password = db_sess.query(User).filter(User.username == user).first().password
-        if password != user_password:
-            return {"error": f"Invalid password."}
-        user_notes = [n for n in db_sess.query(Note).filter(Note.user == user)]
-        # db_sess.commit()
-        # db_sess.close()
-        return {"verdict": "Successful getting notes.", "notes": user_notes}
-
-    except sqlite3.IntegrityError as e:
-        print(e)
-        return {"error": f"{e}"}
-    except Exception as e:
-        print(e)
-        return {"error": f"{e}"}
-
-
-@app.post("/delete_note/")
-async def delete_note(request: Request):
-    body = await request.body()
-
-    data = json.loads(body)
-    note_name = data.get("note_name")
-    user = data.get("user")
-    password = data.get("password")
-
-    if not user:
-        return {"error": "User is required parameter."}
-    if not password:
-        return {"error": "Password is required parameter."}
-    try:
-        db_sess = db_session.create_session()
-        users = [user.username for user in db_sess.query(User).all()]
-        if user not in users:
-            return {"error": "Invalid user."}
-        user_password = db_sess.query(User).filter(User.username == user).first().password
-        if password != user_password:
-            return {"error": f"Invalid password."}
-        user_notes = [c.name for c in db_sess.query(Note).filter(Note.user == user)]
-        if note_name not in user_notes:
-            return {"error": f"You have not with note. Your notes: {user_notes}"}
-
-        db_sess.query(Note).filter(Note.name == note_name).delete()
-        db_sess.commit()
-        db_sess.close()
-
-        return {"verdict": f"Successful delete cycle: {note_name}"}
-
-    except sqlite3.IntegrityError as e:
-        print(e)
-        return {"error": f"{e}"}
-    except Exception as e:
-        print(e)
-        return {"error": f"{e}"}
+    user_days = user_obj.days.copy()
+    user_days[body.day] = duties
+    user_obj.days = user_days.copy()
+    db.commit()
+    return {"verdict": "Successful getting duties.", "duties": duties}
 
 
 @app.post("/duty/")
-async def duty(request: Request):
-    body = await request.body()
+async def duty(body: DutyRequest, db: Session = Depends(get_db)):
+    """Toggle the completion state of a duty."""
+    user_obj = authenticate_user(body.user, body.password, db)
+    day_data = user_obj.days.get(body.selected_date)
+    if not day_data or body.duty_name not in day_data:
+        raise HTTPException(status_code=404, detail="Duty not found for the selected date.")
+    current = day_data[body.duty_name]
+    new_days = user_obj.days.copy()
+    new_days[body.selected_date][body.duty_name] = 1 - current
+    user_obj.days = new_days.copy()
+    db.commit()
+    return {"verdict": "Successful change of duty completion.", "duties": user_obj.days.copy()}
 
-    data = json.loads(body)
-    selected_date = data.get("selected_date")
-    duty_name = data.get("duty_name")
-    username = data.get("user")
-    password = data.get("password")
 
-    # print(selected_date, duty_name)
+# ======================== NOTES ========================
 
-    if not username:
-        return {"error": "User is required parameter."}
-    if not password:
-        return {"error": "Password is required parameter."}
-    try:
-        db_sess = db_session.create_session()
-        users = [user.username for user in db_sess.query(User).all()]
-        if username not in users:
-            return {"error": "Invalid user."}
-        user_password = db_sess.query(User).filter(User.username == username).first().password
-        if password != user_password:
-            return {"error": f"Invalid password."}
-        user = db_sess.query(User).filter(User.username == username).first()
-        # print(user.days.get(selected_date), duty_name)
-        res = user.days.get(selected_date).get(duty_name)
-        # print(res)
-        new_days = user.days.copy()
-        db_sess.commit()
-        new_days[selected_date][duty_name] = 1 - res
-        # print(new_days)
-        user.days = new_days.copy()
 
-        db_sess.commit()
+@app.post("/create_note/")
+async def create_note(body: NoteCreate, db: Session = Depends(get_db)):
+    """Create a new note for the user."""
+    authenticate_user(body.user, body.password, db)
+    if db.query(Note).filter(Note.user == body.user, Note.name == body.name).first():
+        raise HTTPException(status_code=409, detail="You already have this note name.")
+    db.add(Note(name=body.name, user=body.user, descriptions=body.descriptions))
+    db.commit()
+    return {"verdict": f"You successful create new note with name: {body.name}"}
 
-        return {"verdict": f"Successful change of duty completion.", "duties": user.days.copy()}
 
-    except sqlite3.IntegrityError as e:
-        print(e)
-        return {"error": f"{e}"}
-    except Exception as e:
-        print(e)
-        return {"error": f"{e}"}
+@app.post("/get_notes/")
+async def get_notes(body: NotesRequest, db: Session = Depends(get_db)):
+    """Get all notes for a user."""
+    authenticate_user(body.user, body.password, db)
+    return {"verdict": "Successful getting notes.", "notes": list(db.query(Note).filter(Note.user == body.user))}
+
+
+@app.post("/delete_note/")
+async def delete_note(body: NoteDelete, db: Session = Depends(get_db)):
+    """Delete a note by name."""
+    authenticate_user(body.user, body.password, db)
+    note = db.query(Note).filter(Note.user == body.user, Note.name == body.note_name).first()
+    if not note:
+        user_notes = [n.name for n in db.query(Note).filter(Note.user == body.user)]
+        raise HTTPException(status_code=404, detail=f"Note not found. Your notes: {user_notes}")
+    db.delete(note)
+    db.commit()
+    return {"verdict": f"Successful delete note: {body.note_name}"}
+
+
+# ======================== ANALYTICS ========================
 
 
 @app.post("/analytics/")
-async def analytics(request: Request):
-    body = await request.body()
-
+async def analytics(body: AnalyticsRequest, db: Session = Depends(get_db)):
+    """Calculate muscle load analytics for a training cycle."""
+    authenticate_user(body.user, body.password, db)
     try:
-        data = json.loads(body)
-    except json.JSONDecodeError:
-        return {"error": "Invalid JSON format"}
+        with open("db/exercises.json", "r", encoding="utf-8") as f:
+            exercises_db = json.load(f)
+    except FileNotFoundError:
+        raise HTTPException(status_code=500, detail="Exercises database not found.")
 
-    cycle_name = data.get("cycle_name")
-    username = data.get("user")
-    password = data.get("password")
+    cycle = db.query(Cycle).filter(Cycle.user == body.user, Cycle.name == body.cycle_name).first()
+    if not cycle:
+        raise HTTPException(status_code=404, detail=f"Cycle '{body.cycle_name}' not found.")
+    if not cycle.data:
+        raise HTTPException(status_code=400, detail="Cycle data is empty.")
 
-    if not username:
-        return {"error": "User is required parameter."}
-    if not password:
-        return {"error": "Password is required parameter."}
+    daily_analytics = {}
+    total_analytics = {m: 0.0 for m in MUSCLE_GROUPS}
+    days_count = len(cycle.data)
 
-    try:
-        with open('db/exercises.json', 'r', encoding="utf-8") as f:
-            EXERCISES_DB = json.load(f)
+    for day_name, day_exercises in cycle.data.items():
+        day_load = {m: 0.0 for m in MUSCLE_GROUPS}
+        for ex in day_exercises:
+            ex_id = str(ex.get("id", ""))
+            if not ex_id:
+                continue
+            sets = int(ex.get("sets", 3))
+            info = exercises_db[int(ex_id)]
+            if not info:
+                continue
+            for muscle, pr in info.get("muscles", {}).items():
+                wl = round(sets * float(pr) * (7 / days_count), 2)
+                if muscle in day_load:
+                    day_load[muscle] += wl
+                if muscle in total_analytics:
+                    total_analytics[muscle] += wl
+        daily_analytics[day_name] = day_load
 
-        db_sess = db_session.create_session()
-        user = db_sess.query(User).filter(User.username == username).first()
-        if not user:
-            return {"error": "Invalid user."}
-        if password != user.password:
-            return {"error": "Invalid password."}
+    avg_daily = {m: 0.0 for m in MUSCLE_GROUPS}
+    if days_count > 0:
+        for m in MUSCLE_GROUPS:
+            avg_daily[m] = round(
+                sum(daily_analytics[d][m] for d in daily_analytics) * (7 / days_count), 2
+            )
 
-        cycle = db_sess.query(Cycle).filter(Cycle.user == username, Cycle.name == cycle_name).first()
+    optimal_prs = {}
+    for mid, load in total_analytics.items():
+        opt = MUSCLE_GROUPS.get(mid, {}).get("optimal_weekly", 10)
+        optimal_prs[mid] = round((load / opt) * 100, 1) if opt > 0 else 0
 
-        if not cycle:
-            return {"error": f"Cycle '{cycle_name}' not found"}
-        cycle_data = cycle.data
-        if not cycle_data:
-            return {"error": f"Data cycle not found"}
+    THRESHOLDS = [
+        (130, "overloaded", "#ff4444"),
+        (80, "optimal", "#44ff44"),
+        (40, "moderate", "#ffa500"),
+        (10, "underloaded", "#ffff00"),
+        (0, "untrained", "#cccccc"),
+    ]
+    load_status = {}
+    for mid, pr in optimal_prs.items():
+        for thr, lbl, clr in THRESHOLDS:
+            if pr > thr:
+                load_status[mid] = {"status": lbl, "color": clr, "pr": pr}
+                break
 
-        # print(cycle_data)
+    MSGS = {
+        "overloaded": ("Перегрузка ({pr}%). Снизьте нагрузку.", "high"),
+        "optimal": ("Оптимально ({pr}%).", "low"),
+        "moderate": ("Средняя нагрузка ({pr}%). Можно увеличить.", "medium"),
+        "underloaded": ("Недогруз ({pr}%). Добавьте упражнения.", "high"),
+        "untrained": ("Не тренируется ({pr}%).", "high"),
+    }
+    recs = []
+    for mid, data in load_status.items():
+        name = MUSCLE_GROUPS[mid]["name"]
+        tmpl, prio = MSGS[data["status"]]
+        recs.append({
+            "message": f"{name}: {tmpl.format(pr=data['pr'])}",
+            "priority": prio,
+            "muscle": name,
+        })
+    recs.sort(key=lambda x: {"high": 0, "medium": 1, "low": 2}[x["priority"]])
 
-        # РАСЧЕТ ДНЕВНОЙ АНАЛИТИКИ И АНАЛИТИКИ ЗА ТРЕНИРОВКУ
-        daily_analytics = {}
-        total_analytics = {muscle: 0.0 for muscle in MUSCLE_GROUPS.keys()}
-        days_count = len(cycle_data)
-
-        for day_name, day_exercises in cycle_data.items():
-            # print(f"Processing {day_name}: {day_exercises}")
-            day_load = {muscle: 0.0 for muscle in MUSCLE_GROUPS.keys()}
-
-            for exercise_data in day_exercises:
-                exercise_id = str(exercise_data.get("id", ""))
-                if not exercise_id:
-                    continue
-                sets_count = int(exercise_data.get("sets", 3))
-                exercise_info = EXERCISES_DB[int(exercise_id)]
-
-                if not exercise_info:
-                    print(f"Exercise ID {exercise_id} not found in database")
-                    continue
-                muscles = exercise_info.get("muscles", {})
-
-                for muscle, pr in muscles.items():
-                    try:
-                        muscle_pr = float(pr)
-                    except (ValueError, TypeError):
-                        muscle_pr = 0.0
-                    load = sets_count * muscle_pr
-
-                    if muscle in day_load:
-                        day_load[muscle] += round(load * (7 / days_count), 2)
-
-                    if muscle in total_analytics:
-                        total_analytics[muscle] += round(load * (7 / days_count), 2)
-
-            daily_analytics[day_name] = day_load
-
-        # РАСЧЕТ СРЕДНЕЙ ДНЕВНОЙ АНАЛИТИКИ
-        days_count = len(daily_analytics)
-        avg_daily = {muscle: 0.0 for muscle in MUSCLE_GROUPS.keys()}
-        print
-        if days_count > 0:
-            for muscle in MUSCLE_GROUPS.keys():
-                total = sum(daily_analytics[day][muscle] for day in daily_analytics)
-                avg_daily[muscle] = round(total * (7 / days_count), 2)
-
-        # СЧИТАЕМ СКОЛЬКО ПРОЦЕНТОВ ОТ ОПТИМАЛЬНОГО
-        optimal_prs = {}
-
-        for muscle_id, load in total_analytics.items():
-            muscle_info = MUSCLE_GROUPS.get(muscle_id, {})
-            optimal_weekly = muscle_info.get('optimal_weekly', 10)
-
-            if optimal_weekly > 0:
-                pr = round((load / optimal_weekly) * 100, 1)
-            else:
-                pr = 0
-
-            optimal_prs[muscle_id] = pr
-
-        # СТАТУС НАГРУЗКИ
-        load_status = {}
-        for muscle_id, pr in optimal_prs.items():
-            if pr > 130:
-                status = "overloaded"
-                color = "#ff4444"
-            elif pr > 80:
-                status = "optimal"
-                color = "#44ff44"
-            elif pr > 40:
-                status = "moderate"
-                color = "#ffa500"
-            elif pr > 10:
-                status = "underloaded"
-                color = "#ffff00"
-            else:
-                status = "untrained"
-                color = "#cccccc"
-
-            load_status[muscle_id] = {
-                "status": status,
-                "color": color,
-                "pr": pr
-            }
-
-        # 3. РЕКОМЕНДАЦИИ
-        recommendations = []
-
-        for muscle_id, data in load_status.items():
-            muscle_name = MUSCLE_GROUPS[muscle_id]['name']
-            pr = data['pr']
-            status = data['status']
-
-            if status == "overloaded":
-                rec = f"{muscle_name}: Перегрузка ({pr}%). Снизьте нагрузку."
-                priority = "high"
-            elif status == "optimal":
-                rec = f"{muscle_name}: Оптимально ({pr}%)."
-                priority = "low"
-            elif status == "moderate":
-                rec = f"{muscle_name}: Средняя нагрузка ({pr}%). Можно увеличить."
-                priority = "medium"
-            elif status == "underloaded":
-                rec = f"{muscle_name}: Недогруз ({pr}%). Добавьте упражнения."
-                priority = "high"
-            else:
-                rec = f"{muscle_name}: Не тренируется ({pr}%)."
-                priority = "high"
-
-            recommendations.append({
-                "message": rec,
-                "priority": priority,
-                "muscle": muscle_name
-            })
-        recommendations.sort(key=lambda x: {"high": 0, "medium": 1, "low": 2}[x["priority"]])
-
-        # РЕЗУЛЬТАТ
-        result = {
-            "verdict": "Analytics calculated successfully",
-            "cycle_name": cycle_name,
-            "days_count": days_count,
-            "daily_analytics": daily_analytics,
-            "total_analytics": total_analytics,
-            "average_daily": avg_daily,
-            "optimal_percentages": optimal_prs,
-            "load_status": load_status,
-            "recommendations": recommendations[:5],
-        }
-
-        return result
-
-    except sqlite3.IntegrityError as e:
-        print(f"Database error: {e}")
-        return {"error": f"Database error: {str(e)}"}
-    except Exception as e:
-        print(f"Error in analytics: {e}")
-        import traceback
-        traceback.print_exc()
-        return {"error": f"Calculation error: {str(e)}"}
+    return {
+        "verdict": "Analytics calculated successfully",
+        "cycle_name": body.cycle_name,
+        "days_count": days_count,
+        "daily_analytics": daily_analytics,
+        "total_analytics": total_analytics,
+        "average_daily": avg_daily,
+        "optimal_percentages": optimal_prs,
+        "load_status": load_status,
+        "recommendations": recs[:5],
+    }
 
 
 @app.post("/get_exercises/")
-async def exercises(request: Request):
+async def exercises():
+    """Return all available exercises."""
     try:
-        with open('db/exercises.json', encoding="utf-8") as f:
-            res = json.load(f)
-        return res
-    except Exception as e:
-        print(e)
-        return {"error": f"{e}"}
+        with open("db/exercises.json", encoding="utf-8") as f:
+            return json.load(f)
+    except FileNotFoundError:
+        raise HTTPException(status_code=500, detail="Exercises database not found.")
+
+
+# ======================== SOCIAL: PUBLISH ========================
+
+
+@app.post("/publish_cycle/")
+async def publish_cycle(body: PublishCycleRequest, db: Session = Depends(get_db)):
+    """Make a training cycle public."""
+    authenticate_user(body.user, body.password, db)
+    cycle = db.query(Cycle).filter(Cycle.user == body.user, Cycle.name == body.cycle_name).first()
+    if not cycle:
+        raise HTTPException(status_code=404, detail="Cycle not found.")
+    cycle.is_public = 1
+    db.commit()
+    logger.info("Cycle published: %s by %s", body.cycle_name, body.user)
+    return {"verdict": f"Cycle '{body.cycle_name}' is now public."}
+
+
+@app.post("/unpublish_cycle/")
+async def unpublish_cycle(body: PublishCycleRequest, db: Session = Depends(get_db)):
+    """Make a training cycle private."""
+    authenticate_user(body.user, body.password, db)
+    cycle = db.query(Cycle).filter(Cycle.user == body.user, Cycle.name == body.cycle_name).first()
+    if not cycle:
+        raise HTTPException(status_code=404, detail="Cycle not found.")
+    cycle.is_public = 0
+    db.commit()
+    logger.info("Cycle unpublished: %s by %s", body.cycle_name, body.user)
+    return {"verdict": f"Cycle '{body.cycle_name}' is now private."}
+
+
+# ======================== SOCIAL: FOLLOW ========================
+
+
+@app.post("/follow/")
+async def follow_user(body: FollowRequest, db: Session = Depends(get_db)):
+    """Follow another user."""
+    authenticate_user(body.user, body.password, db)
+    if body.user == body.target_user:
+        raise HTTPException(status_code=400, detail="You cannot follow yourself.")
+    target = db.query(User).filter(User.username == body.target_user).first()
+    if not target:
+        raise HTTPException(status_code=404, detail="User not found.")
+    existing = db.query(Follow).filter(
+        Follow.follower == body.user, Follow.following == body.target_user
+    ).first()
+    if existing:
+        raise HTTPException(status_code=409, detail="Already following this user.")
+    db.add(Follow(follower=body.user, following=body.target_user))
+    db.commit()
+    logger.info("%s followed %s", body.user, body.target_user)
+    return {"verdict": f"You are now following {body.target_user}."}
+
+
+@app.post("/unfollow/")
+async def unfollow_user(body: FollowRequest, db: Session = Depends(get_db)):
+    """Unfollow a user."""
+    authenticate_user(body.user, body.password, db)
+    follow_obj = db.query(Follow).filter(
+        Follow.follower == body.user, Follow.following == body.target_user
+    ).first()
+    if not follow_obj:
+        raise HTTPException(status_code=404, detail="You are not following this user.")
+    db.delete(follow_obj)
+    db.commit()
+    logger.info("%s unfollowed %s", body.user, body.target_user)
+    return {"verdict": f"You unfollowed {body.target_user}."}
+
+
+@app.get("/followers/{username}/")
+async def get_followers(username: str, db: Session = Depends(get_db)):
+    """Get the list of followers for a user."""
+    if not db.query(User).filter(User.username == username).first():
+        raise HTTPException(status_code=404, detail="User not found.")
+    followers = [f.follower for f in db.query(Follow).filter(Follow.following == username)]
+    return {"username": username, "followers": followers, "count": len(followers)}
+
+
+@app.get("/following/{username}/")
+async def get_following(username: str, db: Session = Depends(get_db)):
+    """Get the list of users that a user is following."""
+    if not db.query(User).filter(User.username == username).first():
+        raise HTTPException(status_code=404, detail="User not found.")
+    following = [f.following for f in db.query(Follow).filter(Follow.follower == username)]
+    return {"username": username, "following": following, "count": len(following)}
+
+
+# ======================== SOCIAL: LIKES ========================
+
+
+@app.post("/like_cycle/")
+async def like_cycle(body: LikeCycleRequest, db: Session = Depends(get_db)):
+    """Like a public training cycle."""
+    authenticate_user(body.user, body.password, db)
+    cycle = db.query(Cycle).filter(Cycle.id == body.cycle_id, Cycle.is_public == 1).first()
+    if not cycle:
+        raise HTTPException(status_code=404, detail="Public cycle not found.")
+    existing = db.query(Like).filter(Like.user == body.user, Like.cycle_id == body.cycle_id).first()
+    if existing:
+        raise HTTPException(status_code=409, detail="Already liked.")
+    db.add(Like(user=body.user, cycle_id=body.cycle_id))
+    db.commit()
+    likes_count = db.query(Like).filter(Like.cycle_id == body.cycle_id).count()
+    logger.info("%s liked cycle #%d", body.user, body.cycle_id)
+    return {"verdict": "Liked.", "likes_count": likes_count}
+
+
+@app.post("/unlike_cycle/")
+async def unlike_cycle(body: LikeCycleRequest, db: Session = Depends(get_db)):
+    """Remove a like from a training cycle."""
+    authenticate_user(body.user, body.password, db)
+    like_obj = db.query(Like).filter(Like.user == body.user, Like.cycle_id == body.cycle_id).first()
+    if not like_obj:
+        raise HTTPException(status_code=404, detail="Like not found.")
+    db.delete(like_obj)
+    db.commit()
+    likes_count = db.query(Like).filter(Like.cycle_id == body.cycle_id).count()
+    logger.info("%s unliked cycle #%d", body.user, body.cycle_id)
+    return {"verdict": "Unliked.", "likes_count": likes_count}
+
+
+# ======================== SOCIAL: FEED & SEARCH ========================
+
+
+@app.post("/feed/")
+async def feed(body: FeedRequest, db: Session = Depends(get_db)):
+    """Get public cycles from users the authenticated user follows."""
+    authenticate_user(body.user, body.password, db)
+    following = [f.following for f in db.query(Follow).filter(Follow.follower == body.user)]
+    if not following:
+        return {"verdict": "Feed is empty. Follow some users!", "cycles": []}
+    cycles = (
+        db.query(Cycle)
+        .filter(Cycle.user.in_(following), Cycle.is_public == 1)
+        .order_by(Cycle.id.desc())
+        .limit(50)
+        .all()
+    )
+    result = [_cycle_to_dict(c, db, body.user) for c in cycles]
+    return {"verdict": f"Feed loaded. {len(result)} cycles.", "cycles": result}
+
+
+@app.post("/search_cycles/")
+async def search_cycles(body: SearchRequest, db: Session = Depends(get_db)):
+    """Search public training cycles by name. Auth is optional (for is_liked)."""
+    current_user = ""
+    if body.user and body.password:
+        try:
+            authenticate_user(body.user, body.password, db)
+            current_user = body.user
+        except HTTPException:
+            pass
+
+    q = body.query.strip()
+    query = db.query(Cycle).filter(Cycle.is_public == 1)
+    if q:
+        query = query.filter(Cycle.name.ilike(f"%{q}%"))
+    cycles = query.order_by(Cycle.id.desc()).limit(50).all()
+
+    result = [_cycle_to_dict(c, db, current_user) for c in cycles]
+    return {"verdict": f"Found {len(result)} cycles.", "cycles": result}
+
+
+# ======================== SOCIAL: PROFILE ========================
+
+
+@app.get("/profile/{username}/")
+async def get_profile(username: str, db: Session = Depends(get_db)):
+    """Get a user's public profile with stats."""
+    user_obj = db.query(User).filter(User.username == username).first()
+    if not user_obj:
+        raise HTTPException(status_code=404, detail="User not found.")
+
+    cycles_count = db.query(Cycle).filter(Cycle.user == username).count()
+    public_cycles_count = db.query(Cycle).filter(
+        Cycle.user == username, Cycle.is_public == 1
+    ).count()
+    followers_count = db.query(Follow).filter(Follow.following == username).count()
+    following_count = db.query(Follow).filter(Follow.follower == username).count()
+    notes_count = db.query(Note).filter(Note.user == username).count()
+
+    public_cycle_ids = [
+        c.id for c in db.query(Cycle).filter(Cycle.user == username, Cycle.is_public == 1)
+    ]
+    total_likes = (
+        db.query(Like).filter(Like.cycle_id.in_(public_cycle_ids)).count()
+        if public_cycle_ids
+        else 0
+    )
+
+    public_cycles = db.query(Cycle).filter(
+        Cycle.user == username, Cycle.is_public == 1
+    ).all()
+    cycles_data = [_cycle_to_dict(c, db) for c in public_cycles]
+
+    return {
+        "username": username,
+        "bio": getattr(user_obj, "bio", "") or "",
+        "cycles_count": cycles_count,
+        "public_cycles_count": public_cycles_count,
+        "followers_count": followers_count,
+        "following_count": following_count,
+        "notes_count": notes_count,
+        "total_likes": total_likes,
+        "public_cycles": cycles_data,
+    }
+
+
+@app.post("/update_profile/")
+async def update_profile(body: UpdateProfileRequest, db: Session = Depends(get_db)):
+    """Update the authenticated user's profile."""
+    user_obj = authenticate_user(body.user, body.password, db)
+    user_obj.bio = body.bio
+    db.commit()
+    logger.info("Profile updated: %s", body.user)
+    return {"verdict": "Profile updated."}
+
+
+# ======================== MAIN ========================
 
 
 if __name__ == "__main__":
-    uvicorn.run(
-        "web:app",
-        host="127.0.0.1",
-        port=8001,
-        reload=False,
-        log_level="info",
-        workers=2,
-        loop="asyncio",
-        timeout_keep_alive=30,
-        limit_concurrency=100,
-        limit_max_requests=1000,
-        backlog=2048,
-    )
+    uvicorn.run("web:app", host="127.0.0.1", port=8001, reload=True, log_level="info")

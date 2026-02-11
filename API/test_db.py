@@ -1,3 +1,5 @@
+"""Utility script to inspect the database contents."""
+
 from data.db_session import create_session, global_init
 from data.users import User
 from data.cycles import Cycle
@@ -5,35 +7,24 @@ from data.notes import Note
 
 global_init("db/db.db")
 
-# user = User()
-# user.username = "Tima"
-# user.password = "12345"
-db_session = create_session()
-# db_session.add(user)
 
-# user = db_session.query(User).first()
-# days = user.days.copy()
-# days["01-11-2025"] = {'Math Analys: read book 1 hour.': 0}
-# user.days = days.copy()
-# db_session.commit()
+def show_all():
+    db = create_session()
+    try:
+        print("=== Users ===")
+        for user in db.query(User).all():
+            print(f"  id={user.id}  username={user.username}  days_count={len(user.days) if user.days else 0}")
 
-db_session.commit()
+        print("\n=== Cycles ===")
+        for cycle in db.query(Cycle).all():
+            print(f"  id={cycle.id}  name={cycle.name}  user={cycle.user}  days={cycle.days_count}  pause={cycle.pause}")
 
-data = []
-for user in db_session.query(User).all():
-    print(vars(user))
-    data.append(user)
-print(data)
+        print("\n=== Notes ===")
+        for note in db.query(Note).all():
+            print(f"  id={note.id}  name={note.name}  user={note.user}")
+    finally:
+        db.close()
 
-data = []
-for cycle in db_session.query(Cycle).all():
-    print(vars(cycle))
-    data.append(cycle)
-print(data)
 
-data = []
-for cycle in db_session.query(Note).all():
-    print(vars(cycle))
-    data.append(cycle)
-print(data)
-
+if __name__ == "__main__":
+    show_all()

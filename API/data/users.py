@@ -11,6 +11,7 @@ class User(Base):
     password = Column(String(255))
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
     days = Column(JSON)
+    bio = Column(String(500), default="")
 
     def __str__(self):
         return self.username

@@ -14,9 +14,10 @@ class Cycle(Base):
     data = Column(JSON)
     pause = Column(Integer)
     start_at = Column(String(50))
+    is_public = Column(Integer, default=0)
 
     def __str__(self):
         return self.name
 
     def __repr__(self):
-        return self. name
+        return self.name
