@@ -107,44 +107,49 @@ export default function Profile() {
 
   return (
     <div>
-      {/* Header */}
-      <div className="prof-head">
-        <div className="avatar avatar-lg">{user.username[0]}</div>
-        <div className="prof-info">
-          <div className="prof-name">{user.username}</div>
-          {editBio ? (
-            <div className="bio-form">
-              <textarea className="input" value={bio} onChange={e => setBio(e.target.value)}
-                placeholder="О себе..." rows={2} />
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                <button className="btn btn-sm btn-primary" onClick={saveBio}>✓</button>
-                <button className="btn btn-sm btn-outline" onClick={() => setEditBio(false)}>✕</button>
+      {/* Profile Card */}
+      <div className="prof-card">
+        <div className="prof-head">
+          <div className="avatar avatar-lg">{user.username[0]}</div>
+          <div className="prof-info">
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <div className="prof-name">{user.username}</div>
+              <button className="prof-logout" onClick={doLogout}>Выйти</button>
+            </div>
+            {editBio ? (
+              <div className="bio-form">
+                <textarea className="input" value={bio} onChange={e => setBio(e.target.value)}
+                  placeholder="О себе..." rows={2} />
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                  <button className="btn btn-sm btn-primary" onClick={saveBio}>✓</button>
+                  <button className="btn btn-sm btn-outline" onClick={() => setEditBio(false)}>✕</button>
+                </div>
               </div>
-            </div>
-          ) : (
-            <div className="prof-bio" onClick={() => setEditBio(true)} style={{ cursor: 'pointer' }}>
-              {profile?.bio || 'Нажмите, чтобы добавить описание...'}
-            </div>
-          )}
+            ) : (
+              <div className="prof-bio" onClick={() => setEditBio(true)} style={{ cursor: 'pointer' }}>
+                {profile?.bio || 'Нажмите, чтобы добавить описание...'}
+              </div>
+            )}
+          </div>
         </div>
-      </div>
 
-      <div className="prof-stats">
-        <div className="prof-stat">
-          <span className="n">{profile?.cycles_count || 0}</span>
-          <span className="l">тренировок</span>
-        </div>
-        <div className="prof-stat">
-          <span className="n">{profile?.total_ins || 0}</span>
-          <span className="l">IN</span>
-        </div>
-        <div className="prof-stat clickable" onClick={() => setTab('followers')}>
-          <span className="n">{profile?.followers_count || 0}</span>
-          <span className="l">подписчиков</span>
-        </div>
-        <div className="prof-stat clickable" onClick={() => setTab('following')}>
-          <span className="n">{profile?.following_count || 0}</span>
-          <span className="l">подписок</span>
+        <div className="prof-stats">
+          <div className="prof-stat">
+            <span className="n">{profile?.cycles_count || 0}</span>
+            <span className="l">тренировок</span>
+          </div>
+          <div className="prof-stat">
+            <span className="n">{profile?.total_ins || 0}</span>
+            <span className="l">IN</span>
+          </div>
+          <div className="prof-stat clickable" onClick={() => setTab('followers')}>
+            <span className="n">{profile?.followers_count || 0}</span>
+            <span className="l">подписчиков</span>
+          </div>
+          <div className="prof-stat clickable" onClick={() => setTab('following')}>
+            <span className="n">{profile?.following_count || 0}</span>
+            <span className="l">подписок</span>
+          </div>
         </div>
       </div>
 
@@ -211,7 +216,9 @@ export default function Profile() {
                 </div>
                 <div className="dot-menu-wrap" style={{ marginLeft: 'auto' }}>
                   <button className="dot-menu-btn"
-                    onClick={() => setMenuOpen(menuOpen === `n${n.id}` ? null : `n${n.id}`)}>⋮</button>
+                    onClick={() => setMenuOpen(menuOpen === `n${n.id}` ? null : `n${n.id}`)}>
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="5" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="12" cy="19" r="1"/></svg>
+                  </button>
                   {menuOpen === `n${n.id}` && (
                     <div className="dot-menu-dropdown">
                       <button className="danger" onClick={() => deleteNote(n.name)}>Удалить</button>
@@ -264,7 +271,7 @@ export default function Profile() {
         <div className="section">
           {followers.length > 0 ? followers.map(f => (
             <Link to={f === user.username ? '/profile' : `/user/${f}`} key={f} className="user-list-item">
-              <div className="avatar">{f[0]}</div>
+              <div className="avatar avatar-md avatar-other">{f[0]}</div>
               <span className="user-list-name">{f}</span>
             </Link>
           )) : (
@@ -278,7 +285,7 @@ export default function Profile() {
         <div className="section">
           {following.length > 0 ? following.map(f => (
             <Link to={f === user.username ? '/profile' : `/user/${f}`} key={f} className="user-list-item">
-              <div className="avatar">{f[0]}</div>
+              <div className="avatar avatar-md avatar-other">{f[0]}</div>
               <span className="user-list-name">{f}</span>
             </Link>
           )) : (
@@ -287,10 +294,6 @@ export default function Profile() {
         </div>
       )}
 
-      {/* Logout */}
-      <div className="section text-center">
-        <button className="btn btn-outline" onClick={doLogout}>Выйти</button>
-      </div>
     </div>
   )
 }

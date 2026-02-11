@@ -58,7 +58,9 @@ export default function Workouts() {
               </h3>
               <div className="dot-menu-wrap">
                 <button className="dot-menu-btn"
-                  onClick={() => setMenuOpen(menuOpen === c.id ? null : c.id)}>⋮</button>
+                  onClick={() => setMenuOpen(menuOpen === c.id ? null : c.id)}>
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="5" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="12" cy="19" r="1"/></svg>
+                </button>
                 {menuOpen === c.id && (
                   <div className="dot-menu-dropdown">
                     <button onClick={() => deleteCycle(c.name)} className="danger">Удалить</button>

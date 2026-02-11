@@ -73,41 +73,42 @@ export default function UserProfile() {
         <h1>{username}</h1>
       </div>
 
-      {/* Profile header */}
-      <div className="prof-head">
-        <div className="avatar avatar-lg">{username[0]}</div>
-        <div className="prof-info">
-          <div className="prof-name">{username}</div>
-          {profile.bio && <div className="prof-bio">{profile.bio}</div>}
-          {user && (
-            <button
-              className={`btn ${isFollowing ? 'btn-following' : 'btn-follow'}`}
-              onClick={toggleFollow}
-              style={{ marginTop: 8 }}
-            >
-              {isFollowing ? '✓ Подписка' : '+ Подписаться'}
-            </button>
-          )}
+      {/* Profile Card */}
+      <div className="prof-card">
+        <div className="prof-head">
+          <div className="avatar avatar-lg avatar-other">{username[0]}</div>
+          <div className="prof-info">
+            <div className="prof-name">{username}</div>
+            {profile.bio && <div className="prof-bio">{profile.bio}</div>}
+            {user && (
+              <button
+                className={`btn ${isFollowing ? 'btn-following' : 'btn-follow'}`}
+                onClick={toggleFollow}
+                style={{ marginTop: 8 }}
+              >
+                {isFollowing ? '✓ Подписка' : '+ Подписаться'}
+              </button>
+            )}
+          </div>
         </div>
-      </div>
 
-      {/* Stats */}
-      <div className="prof-stats">
-        <div className="prof-stat">
-          <span className="n">{profile.cycles_count || 0}</span>
-          <span className="l">тренировок</span>
-        </div>
-        <div className="prof-stat">
-          <span className="n">{profile.total_ins || 0}</span>
-          <span className="l">IN</span>
-        </div>
-        <div className="prof-stat clickable" onClick={() => setTab('followers')}>
-          <span className="n">{profile.followers_count || 0}</span>
-          <span className="l">подписчиков</span>
-        </div>
-        <div className="prof-stat clickable" onClick={() => setTab('following')}>
-          <span className="n">{profile.following_count || 0}</span>
-          <span className="l">подписок</span>
+        <div className="prof-stats">
+          <div className="prof-stat">
+            <span className="n">{profile.cycles_count || 0}</span>
+            <span className="l">тренировок</span>
+          </div>
+          <div className="prof-stat">
+            <span className="n">{profile.total_ins || 0}</span>
+            <span className="l">IN</span>
+          </div>
+          <div className="prof-stat clickable" onClick={() => setTab('followers')}>
+            <span className="n">{profile.followers_count || 0}</span>
+            <span className="l">подписчиков</span>
+          </div>
+          <div className="prof-stat clickable" onClick={() => setTab('following')}>
+            <span className="n">{profile.following_count || 0}</span>
+            <span className="l">подписок</span>
+          </div>
         </div>
       </div>
 
@@ -152,7 +153,7 @@ export default function UserProfile() {
         <div className="section">
           {followers.length > 0 ? followers.map(f => (
             <Link to={f === user?.username ? '/profile' : `/user/${f}`} key={f} className="user-list-item">
-              <div className="avatar">{f[0]}</div>
+              <div className="avatar avatar-md avatar-other">{f[0]}</div>
               <span className="user-list-name">{f}</span>
             </Link>
           )) : (
@@ -166,7 +167,7 @@ export default function UserProfile() {
         <div className="section">
           {following.length > 0 ? following.map(f => (
             <Link to={f === user?.username ? '/profile' : `/user/${f}`} key={f} className="user-list-item">
-              <div className="avatar">{f[0]}</div>
+              <div className="avatar avatar-md avatar-other">{f[0]}</div>
               <span className="user-list-name">{f}</span>
             </Link>
           )) : (

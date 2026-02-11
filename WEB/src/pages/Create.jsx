@@ -125,7 +125,7 @@ export default function Create() {
       {error && <div className="error" style={{ padding: 16 }}>{error}</div>}
 
       {tab === 'workout' && (
-        <form onSubmit={submitWorkout} className="section">
+        <form onSubmit={submitWorkout} className="figma-card">
           <div className="form-group">
             <label className="form-label">Название</label>
             <input className="input" value={name} onChange={e => setName(e.target.value)} required />
@@ -224,7 +224,7 @@ export default function Create() {
       )}
 
       {tab === 'note' && (
-        <form onSubmit={submitNote} className="section">
+        <form onSubmit={submitNote} className="figma-card">
           <div className="form-group">
             <label className="form-label">Что нового?</label>
             <textarea className="input" rows={4} value={noteText}

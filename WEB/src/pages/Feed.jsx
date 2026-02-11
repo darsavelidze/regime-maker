@@ -43,7 +43,7 @@ export default function Feed() {
   }
 
   return (
-    <div className="section" style={{ paddingTop: 0 }}>
+    <div>
       {cycles.map(c => (
         <WorkoutCard key={c.id} cycle={c} onIn={toggleIn} showDate />
       ))}
