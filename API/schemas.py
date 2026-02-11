@@ -158,3 +158,21 @@ class SearchRequest(BaseModel):
     query: str = ""
     user: str = ""
     password: str = ""
+
+
+class CloneCycleRequest(BaseModel):
+    """Schema for cloning a public cycle."""
+
+    cycle_id: int
+    user: str
+    password: str
+    start_at: str
+
+
+class AnalyticsPublicRequest(BaseModel):
+    """Schema for analyzing any user's cycle."""
+
+    cycle_name: str
+    target_user: str
+    user: str
+    password: str

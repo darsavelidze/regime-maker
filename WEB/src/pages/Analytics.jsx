@@ -12,20 +12,25 @@ export default function Analytics() {
   const [error, setError] = useState('')
 
   const cycleName = state?.cycleName || ''
+  const targetUser = state?.targetUser || ''
 
   useEffect(() => {
     if (!cycleName) { setLoading(false); return }
-    post('/analytics/', auth(user, { cycle_name: cycleName }))
+    const endpoint = targetUser ? '/analytics_public/' : '/analytics/'
+    const payload = targetUser
+      ? auth(user, { cycle_name: cycleName, target_user: targetUser })
+      : auth(user, { cycle_name: cycleName })
+    post(endpoint, payload)
       .then(setData)
       .catch(err => setError(err.message))
       .finally(() => setLoading(false))
-  }, [cycleName, user])
+  }, [cycleName, targetUser, user])
 
   return (
     <div>
       <div className="page-head">
         <button className="back-btn" onClick={() => nav(-1)}>←</button>
-        <h1>Анализ: {cycleName}</h1>
+        <h1>Анализ: {cycleName}{targetUser ? ` (@${targetUser})` : ''}</h1>
       </div>
 
       {loading && <div className="spinner">Загрузка...</div>}

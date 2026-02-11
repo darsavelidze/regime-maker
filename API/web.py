@@ -34,6 +34,8 @@ from schemas import (
     UpdateProfileRequest,
     FeedRequest,
     SearchRequest,
+    CloneCycleRequest,
+    AnalyticsPublicRequest,
 )
 from auth import hash_password, authenticate_user
 
@@ -110,6 +112,7 @@ def _cycle_to_dict(cycle: Cycle, db: Session, current_user: str = "") -> dict:
         "data": cycle.data,
         "start_at": cycle.start_at,
         "is_public": bool(getattr(cycle, "is_public", 0)),
+        "original_author": getattr(cycle, "original_author", "") or "",
         "likes_count": likes_count,
         "is_liked": is_liked,
         "author": {
@@ -559,6 +562,146 @@ async def search_cycles(body: SearchRequest, db: Session = Depends(get_db)):
 
     result = [_cycle_to_dict(c, db, current_user) for c in cycles]
     return {"verdict": f"Found {len(result)} cycles.", "cycles": result}
+
+
+@app.post("/search_users/")
+async def search_users(body: SearchRequest, db: Session = Depends(get_db)):
+    """Search users by username."""
+    q = body.query.strip()
+    if not q:
+        return {"users": []}
+    users = db.query(User).filter(User.username.ilike(f"%{q}%")).limit(20).all()
+    result = []
+    for u in users:
+        cycles_count = db.query(Cycle).filter(Cycle.user == u.username).count()
+        followers_count = db.query(Follow).filter(Follow.following == u.username).count()
+        result.append({
+            "username": u.username,
+            "bio": getattr(u, "bio", "") or "",
+            "cycles_count": cycles_count,
+            "followers_count": followers_count,
+        })
+    return {"users": result}
+
+
+@app.post("/clone_cycle/")
+async def clone_cycle(body: CloneCycleRequest, db: Session = Depends(get_db)):
+    """Clone a public cycle to the authenticated user's account."""
+    authenticate_user(body.user, body.password, db)
+    cycle = db.query(Cycle).filter(Cycle.id == body.cycle_id, Cycle.is_public == 1).first()
+    if not cycle:
+        raise HTTPException(status_code=404, detail="Public cycle not found.")
+    # Determine original author (follow chain)
+    original = getattr(cycle, "original_author", "") or cycle.user
+    # Generate unique name
+    base_name = cycle.name
+    new_name = base_name
+    counter = 1
+    while db.query(Cycle).filter(Cycle.user == body.user, Cycle.name == new_name).first():
+        counter += 1
+        new_name = f"{base_name} ({counter})"
+    new_cycle = Cycle(
+        name=new_name,
+        user=body.user,
+        days_count=cycle.days_count,
+        pause=cycle.pause,
+        descriptions=cycle.descriptions,
+        data=cycle.data,
+        start_at=body.start_at,
+        is_public=0,
+        original_author=original,
+    )
+    db.add(new_cycle)
+    db.commit()
+    logger.info("%s cloned cycle #%d ('%s') from %s", body.user, cycle.id, cycle.name, cycle.user)
+    return {"verdict": f"Cycle '{new_name}' cloned successfully.", "new_name": new_name}
+
+
+@app.post("/analytics_public/")
+async def analytics_public(body: AnalyticsPublicRequest, db: Session = Depends(get_db)):
+    """Calculate analytics for any user's public cycle."""
+    authenticate_user(body.user, body.password, db)
+    cycle = db.query(Cycle).filter(
+        Cycle.user == body.target_user,
+        Cycle.name == body.cycle_name,
+        Cycle.is_public == 1,
+    ).first()
+    if not cycle:
+        raise HTTPException(status_code=404, detail=f"Public cycle '{body.cycle_name}' not found for user '{body.target_user}'.")
+    if not cycle.data:
+        raise HTTPException(status_code=400, detail="Cycle data is empty.")
+
+    try:
+        with open("db/exercises.json", "r", encoding="utf-8") as f:
+            exercises_db = json.load(f)
+    except FileNotFoundError:
+        raise HTTPException(status_code=500, detail="Exercises database not found.")
+
+    daily_analytics = {}
+    total_analytics = {m: 0.0 for m in MUSCLE_GROUPS}
+    days_count = len(cycle.data)
+    for day_name, day_exercises in cycle.data.items():
+        day_load = {m: 0.0 for m in MUSCLE_GROUPS}
+        for ex in day_exercises:
+            ex_id = str(ex.get("id", ""))
+            if not ex_id:
+                continue
+            sets = int(ex.get("sets", 3))
+            info = exercises_db[int(ex_id)]
+            if not info:
+                continue
+            for muscle, pr in info.get("muscles", {}).items():
+                wl = round(sets * float(pr) * (7 / days_count), 2)
+                if muscle in day_load:
+                    day_load[muscle] += wl
+                if muscle in total_analytics:
+                    total_analytics[muscle] += wl
+        daily_analytics[day_name] = day_load
+
+    optimal_prs = {}
+    for mid, load in total_analytics.items():
+        opt = MUSCLE_GROUPS.get(mid, {}).get("optimal_weekly", 10)
+        optimal_prs[mid] = round((load / opt) * 100, 1) if opt > 0 else 0
+
+    THRESHOLDS = [
+        (130, "overloaded", "#ff4444"),
+        (80, "optimal", "#44ff44"),
+        (40, "moderate", "#ffa500"),
+        (10, "underloaded", "#ffff00"),
+        (0, "untrained", "#cccccc"),
+    ]
+    load_status = {}
+    for mid, pr in optimal_prs.items():
+        for thr, lbl, clr in THRESHOLDS:
+            if pr > thr:
+                load_status[mid] = {"status": lbl, "color": clr, "pr": pr}
+                break
+
+    MSGS = {
+        "overloaded": ("Перегрузка ({pr}%). Снизьте нагрузку.", "high"),
+        "optimal": ("Оптимально ({pr}%).", "low"),
+        "moderate": ("Средняя нагрузка ({pr}%). Можно увеличить.", "medium"),
+        "underloaded": ("Недогруз ({pr}%). Добавьте упражнения.", "high"),
+        "untrained": ("Не тренируется ({pr}%).", "high"),
+    }
+    recs = []
+    for mid, data in load_status.items():
+        name = MUSCLE_GROUPS[mid]["name"]
+        tmpl, prio = MSGS[data["status"]]
+        recs.append({
+            "message": f"{name}: {tmpl.format(pr=data['pr'])}",
+            "priority": prio,
+            "muscle": name,
+        })
+    recs.sort(key=lambda x: {"high": 0, "medium": 1, "low": 2}[x["priority"]])
+
+    return {
+        "verdict": "Analytics calculated successfully",
+        "cycle_name": body.cycle_name,
+        "days_count": days_count,
+        "load_status": load_status,
+        "recommendations": recs[:5],
+    }
 
 
 # ======================== SOCIAL: PROFILE ========================

@@ -28,6 +28,11 @@ export default function WorkoutCard({ cycle, onLike, showAuthor = true }) {
         <div className="card-meta">
           {cycle.days_count} дн · пауза {cycle.pause} дн
         </div>
+        {cycle.original_author && (
+          <div className="original-author">
+            📎 от <Link to={`/user/${cycle.original_author}`}>@{cycle.original_author}</Link>
+          </div>
+        )}
         {cycle.descriptions?.length > 0 && (
           <ul className="card-desc">
             {cycle.descriptions.map((d, i) => (

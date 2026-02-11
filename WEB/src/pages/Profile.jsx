@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, Link } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { post, get, auth } from '../api'
 
@@ -10,20 +10,26 @@ export default function Profile() {
   const [profile, setProfile] = useState(null)
   const [cycles, setCycles] = useState([])
   const [notes, setNotes] = useState([])
+  const [followers, setFollowers] = useState([])
+  const [following, setFollowing] = useState([])
   const [bio, setBio] = useState('')
   const [editBio, setEditBio] = useState(false)
   const [loading, setLoading] = useState(true)
 
   const load = useCallback(async () => {
     try {
-      const [prof, cyc, nt] = await Promise.all([
+      const [prof, cyc, nt, fData, fgData] = await Promise.all([
         get(`/profile/${user.username}/`),
         post('/user_cycles/', auth(user)),
         post('/get_notes/', auth(user)),
+        get(`/followers/${user.username}/`),
+        get(`/following/${user.username}/`),
       ])
       setProfile(prof)
       setCycles(cyc.cycles || [])
       setNotes(nt.notes || [])
+      setFollowers(fData.followers || [])
+      setFollowing(fgData.following || [])
       setBio(prof.bio || '')
     } catch {}
     finally { setLoading(false) }
@@ -97,16 +103,16 @@ export default function Profile() {
           <span className="l">тренировок</span>
         </div>
         <div className="prof-stat">
+          <span className="n">{profile?.total_likes || 0}</span>
+          <span className="l">лайков</span>
+        </div>
+        <div className="prof-stat clickable" onClick={() => setTab('followers')}>
           <span className="n">{profile?.followers_count || 0}</span>
           <span className="l">подписчиков</span>
         </div>
-        <div className="prof-stat">
+        <div className="prof-stat clickable" onClick={() => setTab('following')}>
           <span className="n">{profile?.following_count || 0}</span>
           <span className="l">подписок</span>
-        </div>
-        <div className="prof-stat">
-          <span className="n">{profile?.total_likes || 0}</span>
-          <span className="l">лайков</span>
         </div>
       </div>
 
@@ -116,6 +122,10 @@ export default function Profile() {
           onClick={() => setTab('workouts')}>Тренировки</button>
         <button className={`tab ${tab === 'notes' ? 'active' : ''}`}
           onClick={() => setTab('notes')}>Заметки</button>
+        <button className={`tab ${tab === 'followers' ? 'active' : ''}`}
+          onClick={() => setTab('followers')}>Подписчики</button>
+        <button className={`tab ${tab === 'following' ? 'active' : ''}`}
+          onClick={() => setTab('following')}>Подписки</button>
       </div>
 
       {/* Workouts */}
@@ -134,6 +144,11 @@ export default function Profile() {
               <div className="card-meta">
                 {c.days_count} дн · пауза {c.pause} дн · с {c.start_at}
               </div>
+              {c.original_author && (
+                <div className="original-author">
+                  📎 от <Link to={`/user/${c.original_author}`}>@{c.original_author}</Link>
+                </div>
+              )}
               {c.descriptions?.length > 0 && (
                 <ul className="card-desc" style={{ marginTop: 8 }}>
                   {c.descriptions.map((d, i) => (
@@ -181,6 +196,34 @@ export default function Profile() {
             <div className="empty">
               <p>Нет заметок</p>
             </div>
+          )}
+        </div>
+      )}
+
+      {/* Followers */}
+      {tab === 'followers' && (
+        <div className="section">
+          {followers.length > 0 ? followers.map(f => (
+            <Link to={`/user/${f}`} key={f} className="user-list-item">
+              <div className="avatar">{f[0]}</div>
+              <span className="user-list-name">{f}</span>
+            </Link>
+          )) : (
+            <div className="empty"><p>Нет подписчиков</p></div>
+          )}
+        </div>
+      )}
+
+      {/* Following */}
+      {tab === 'following' && (
+        <div className="section">
+          {following.length > 0 ? following.map(f => (
+            <Link to={`/user/${f}`} key={f} className="user-list-item">
+              <div className="avatar">{f[0]}</div>
+              <span className="user-list-name">{f}</span>
+            </Link>
+          )) : (
+            <div className="empty"><p>Нет подписок</p></div>
           )}
         </div>
       )}

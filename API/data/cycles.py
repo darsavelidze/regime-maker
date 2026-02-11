@@ -15,6 +15,7 @@ class Cycle(Base):
     pause = Column(Integer)
     start_at = Column(String(50))
     is_public = Column(Integer, default=0)
+    original_author = Column(String(50), default="")
 
     def __str__(self):
         return self.name
