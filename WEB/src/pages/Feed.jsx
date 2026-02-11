@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { useAuth } from '../context/AuthContext'
 import { post, auth } from '../api'
 import WorkoutCard from '../components/WorkoutCard'
+import { Loader2 } from 'lucide-react'
 
 export default function Feed() {
   const { user } = useAuth()
@@ -30,20 +31,26 @@ export default function Feed() {
     } catch {}
   }
 
-  if (loading) return <div className="spinner">Загрузка...</div>
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-20">
+        <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
+      </div>
+    )
+  }
 
   if (!cycles.length) {
     return (
-      <div className="empty">
-        <p style={{ fontSize: 36 }}>📭</p>
-        <p>Лента пуста</p>
-        <p>Подпишитесь на пользователей или исследуйте тренировки</p>
+      <div className="flex flex-col items-center justify-center py-20 px-4 text-center">
+        <span className="text-5xl mb-4">📭</span>
+        <p className="text-lg font-medium">Лента пуста</p>
+        <p className="text-muted-foreground">Подпишитесь на пользователей или исследуйте тренировки</p>
       </div>
     )
   }
 
   return (
-    <div>
+    <div className="p-4">
       {cycles.map(c => (
         <WorkoutCard key={c.id} cycle={c} onIn={toggleIn} showDate />
       ))}

@@ -1,6 +1,8 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useAuth } from '../context/AuthContext'
 import { post, auth } from '../api'
+import { ChevronLeft, ChevronRight, Check, Loader2 } from 'lucide-react'
+import { Card, CardContent } from '../components/ui/Card'
 
 const WEEKDAYS = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс']
 const MONTHS = ['Январь','Февраль','Март','Апрель','Май','Июнь',
@@ -15,6 +17,17 @@ function getFirstDayOfWeek(y, m) {
 }
 function pad(n) { return String(n).padStart(2, '0') }
 function toISO(y, m, d) { return `${y}-${pad(m + 1)}-${pad(d)}` }
+
+function dayColor(count, max) {
+  if (count === 0) return ''
+  if (max <= 0) return ''
+  const ratio = Math.min(count / max, 1)
+  // from light to burgundy
+  const r = Math.round(139 + (116 * (1 - ratio)))  // 139 → 255
+  const g = Math.round(0 + (200 * (1 - ratio)))    // 0 → 200
+  const b = Math.round(0 + (200 * (1 - ratio)))    // 0 → 200
+  return `rgb(${r},${g},${b})`
+}
 
 export default function Day() {
   const { user } = useAuth()
@@ -85,76 +98,122 @@ export default function Day() {
   const todayISO = toISO(today.getFullYear(), today.getMonth(), today.getDate())
 
   return (
-    <div>
-      {/* Calendar Card */}
-      <div className="cal-card">
-        <div className="cal-header">
-          <button className="cal-nav" onClick={prevMonth}>
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
-          </button>
-          <span className="cal-title">{MONTHS[month]} {year}</span>
-          <button className="cal-nav" onClick={nextMonth}>
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
-          </button>
-        </div>
+    <div className="p-4">
+      {/* Calendar header */}
+      <Card className="mb-4">
+        <CardContent className="p-4">
+          <div className="flex items-center justify-between mb-4">
+            <button 
+              className="p-2 rounded-full hover:bg-muted transition-colors"
+              onClick={prevMonth}
+            >
+              <ChevronLeft className="w-5 h-5" />
+            </button>
+            <span className="font-bold text-lg">{MONTHS[month]} {year}</span>
+            <button 
+              className="p-2 rounded-full hover:bg-muted transition-colors"
+              onClick={nextMonth}
+            >
+              <ChevronRight className="w-5 h-5" />
+            </button>
+          </div>
 
-        <div className="cal-weekdays">
-          {WEEKDAYS.map(w => (
-            <div key={w} className="cal-weekday">{w}</div>
-          ))}
-        </div>
-        <div className="cal-grid">
-          {cells.map((d, i) => {
-            if (d === null) return <div key={`e${i}`} className="cal-cell empty" />
-            const dateStr = toISO(year, month, d)
-            const count = monthData[dateStr] || 0
-            const isSelected = dateStr === selectedDate
-            const isToday = dateStr === todayISO
-            const hasWorkout = count > 0
-            return (
-              <div
-                key={d}
-                className={`cal-cell${isSelected ? ' selected' : ''}${isToday ? ' today' : ''}${hasWorkout ? ' has-workout' : ''}`}
-                onClick={() => selectDay(d)}
-              >
-                {d}
+          {/* Weekday labels */}
+          <div className="grid grid-cols-7 gap-1 mb-2">
+            {WEEKDAYS.map(w => (
+              <div key={w} className="text-center text-xs text-muted-foreground font-medium py-1">
+                {w}
+              </div>
+            ))}
+          </div>
+
+          {/* Calendar grid */}
+          <div className="grid grid-cols-7 gap-1">
+            {cells.map((d, i) => {
+              if (d === null) return <div key={`e${i}`} className="aspect-square" />
+              const dateStr = toISO(year, month, d)
+              const count = monthData[dateStr] || 0
+              const isSelected = dateStr === selectedDate
+              const isToday = dateStr === todayISO
+              const bg = dayColor(count, maxDuties)
+              
+              return (
+                <button
+                  key={d}
+                  className={`aspect-square rounded-lg flex flex-col items-center justify-center text-sm transition-all relative ${
+                    isSelected 
+                      ? 'ring-2 ring-primary ring-offset-2' 
+                      : ''
+                  } ${
+                    isToday 
+                      ? 'font-bold' 
+                      : ''
+                  } ${
+                    count > 0 
+                      ? 'text-white' 
+                      : 'hover:bg-muted'
+                  }`}
+                  style={{ backgroundColor: bg || undefined }}
+                  onClick={() => selectDay(d)}
+                >
+                  {d}
+                  {count > 0 && (
+                    <span className="absolute bottom-1 w-1 h-1 rounded-full bg-white/70" />
+                  )}
+                </button>
+              )
+            })}
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Selected day duties */}
+      <Card>
+        <CardContent className="p-4">
+          <div className="text-sm text-muted-foreground mb-4">{selectedDate}</div>
+
+          {dayLoading && (
+            <div className="flex items-center justify-center py-8">
+              <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
+            </div>
+          )}
+
+          {!dayLoading && duties !== null && (
+            entries.length > 0 ? (
+              <>
+                <p className="text-sm text-muted-foreground mb-4">
+                  Выполнено {done} из {entries.length}
+                </p>
+                <div className="space-y-2">
+                  {entries.map(([name, completed]) => (
+                    <button 
+                      className="w-full flex items-center gap-3 p-3 rounded-xl bg-muted hover:bg-muted/80 transition-colors text-left"
+                      key={name} 
+                      onClick={() => toggleDuty(name)}
+                    >
+                      <div className={`w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0 ${
+                        completed 
+                          ? 'bg-green-500 text-white' 
+                          : 'border-2 border-border'
+                      }`}>
+                        {completed && <Check className="w-4 h-4" />}
+                      </div>
+                      <span
+                        className={completed ? 'line-through text-muted-foreground' : ''}
+                        dangerouslySetInnerHTML={{ __html: name }}
+                      />
+                    </button>
+                  ))}
+                </div>
+              </>
+            ) : (
+              <div className="text-center py-8 text-muted-foreground">
+                <p>На эту дату нет задач</p>
               </div>
             )
-          })}
-        </div>
-      </div>
-
-      {/* Selected day details */}
-      <div className="day-detail-card">
-        <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 12 }}>{selectedDate}</div>
-
-        {dayLoading && <div className="spinner">Загрузка...</div>}
-
-        {!dayLoading && duties !== null && (
-          entries.length > 0 ? (
-            <>
-              <div className="card-meta mb-8">
-                Выполнено {done} из {entries.length}
-              </div>
-              {entries.map(([name, completed]) => (
-                <div className="duty-item" key={name} onClick={() => toggleDuty(name)}>
-                  <div className={`duty-check ${completed ? 'done' : ''}`}>
-                    {completed && '✓'}
-                  </div>
-                  <span
-                    className={`duty-text ${completed ? 'done' : ''}`}
-                    dangerouslySetInnerHTML={{ __html: name }}
-                  />
-                </div>
-              ))}
-            </>
-          ) : (
-            <div className="empty">
-              <p>На эту дату нет задач</p>
-            </div>
-          )
-        )}
-      </div>
+          )}
+        </CardContent>
+      </Card>
     </div>
   )
 }

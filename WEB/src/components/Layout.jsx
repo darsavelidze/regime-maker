@@ -1,75 +1,97 @@
 import { Outlet, NavLink } from 'react-router-dom'
-
-const icons = {
-  home: (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>
-      <polyline points="9 22 9 12 15 12 15 22"/>
-    </svg>
-  ),
-  search: (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
-    </svg>
-  ),
-  plus: (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
-      <line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/>
-    </svg>
-  ),
-  calendar: (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <rect x="3" y="4" width="18" height="18" rx="2" ry="2"/>
-      <line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/>
-      <line x1="3" y1="10" x2="21" y2="10"/>
-    </svg>
-  ),
-  user: (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
-      <circle cx="12" cy="7" r="4"/>
-    </svg>
-  ),
-  dumbbell: (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M6.5 6.5h11M6.5 17.5h11"/>
-      <rect x="2" y="8" width="4" height="8" rx="1"/>
-      <rect x="18" y="8" width="4" height="8" rx="1"/>
-      <rect x="6" y="5" width="2" height="14" rx="1"/>
-      <rect x="16" y="5" width="2" height="14" rx="1"/>
-    </svg>
-  ),
-}
+import { Home, Search, PlusSquare, Calendar, Dumbbell, User } from 'lucide-react'
 
 export default function Layout() {
   return (
-    <div className="app">
-      <header className="header">
-        <span className="logo">IN</span>
+    <div className="min-h-screen bg-background pb-20">
+      {/* Header */}
+      <header className="bg-card border-b border-border sticky top-0 z-50">
+        <div className="max-w-md mx-auto px-4 h-14 flex items-center justify-center">
+          <span className="text-2xl font-black tracking-tight">IN</span>
+        </div>
       </header>
-      <main className="main">
+
+      {/* Main content */}
+      <main className="max-w-md mx-auto">
         <Outlet />
       </main>
-      <nav className="nav">
-        <NavLink to="/" end className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}>
-          {icons.home}<span>Лента</span>
-        </NavLink>
-        <NavLink to="/explore" className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}>
-          {icons.search}<span>Поиск</span>
-        </NavLink>
-        <NavLink to="/create" className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}>
-          {icons.plus}<span>Создать</span>
-        </NavLink>
-        <NavLink to="/day" className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}>
-          {icons.calendar}<span>День</span>
-        </NavLink>
-        <NavLink to="/workouts" className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}>
-          {icons.dumbbell}<span>Трен.</span>
-        </NavLink>
-        <NavLink to="/profile" className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}>
-          {icons.user}<span>Профиль</span>
-        </NavLink>
+
+      {/* Bottom navigation */}
+      <nav className="fixed bottom-0 left-0 right-0 bg-card border-t border-border z-50">
+        <div className="max-w-md mx-auto flex justify-around items-center h-16">
+          <NavLink 
+            to="/" 
+            end 
+            className={({ isActive }) => 
+              `flex flex-col items-center gap-1 p-2 transition-colors ${
+                isActive ? 'text-primary' : 'text-muted-foreground hover:text-foreground'
+              }`
+            }
+          >
+            <Home className="w-6 h-6" />
+            <span className="text-xs">Лента</span>
+          </NavLink>
+
+          <NavLink 
+            to="/explore" 
+            className={({ isActive }) => 
+              `flex flex-col items-center gap-1 p-2 transition-colors ${
+                isActive ? 'text-primary' : 'text-muted-foreground hover:text-foreground'
+              }`
+            }
+          >
+            <Search className="w-6 h-6" />
+            <span className="text-xs">Поиск</span>
+          </NavLink>
+
+          <NavLink 
+            to="/create" 
+            className={({ isActive }) => 
+              `flex flex-col items-center gap-1 p-2 transition-colors ${
+                isActive ? 'text-primary' : 'text-muted-foreground hover:text-foreground'
+              }`
+            }
+          >
+            <PlusSquare className="w-6 h-6" />
+            <span className="text-xs">Создать</span>
+          </NavLink>
+
+          <NavLink 
+            to="/day" 
+            className={({ isActive }) => 
+              `flex flex-col items-center gap-1 p-2 transition-colors ${
+                isActive ? 'text-primary' : 'text-muted-foreground hover:text-foreground'
+              }`
+            }
+          >
+            <Calendar className="w-6 h-6" />
+            <span className="text-xs">День</span>
+          </NavLink>
+
+          <NavLink 
+            to="/workouts" 
+            className={({ isActive }) => 
+              `flex flex-col items-center gap-1 p-2 transition-colors ${
+                isActive ? 'text-primary' : 'text-muted-foreground hover:text-foreground'
+              }`
+            }
+          >
+            <Dumbbell className="w-6 h-6" />
+            <span className="text-xs">Трен.</span>
+          </NavLink>
+
+          <NavLink 
+            to="/profile" 
+            className={({ isActive }) => 
+              `flex flex-col items-center gap-1 p-2 transition-colors ${
+                isActive ? 'text-primary' : 'text-muted-foreground hover:text-foreground'
+              }`
+            }
+          >
+            <User className="w-6 h-6" />
+            <span className="text-xs">Профиль</span>
+          </NavLink>
+        </div>
       </nav>
     </div>
   )

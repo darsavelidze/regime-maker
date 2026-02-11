@@ -1,6 +1,11 @@
 import { useState, useEffect, useMemo } from 'react'
 import { useAuth } from '../context/AuthContext'
 import { post, auth } from '../api'
+import { Card, CardContent } from '../components/ui/Card'
+import { Input, Textarea } from '../components/ui/Input'
+import { Button } from '../components/ui/Button'
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '../components/ui/Tabs'
+import { X } from 'lucide-react'
 
 /* helpers */
 const DAY_NAMES = ['Вс','Пн','Вт','Ср','Чт','Пт','Сб']
@@ -111,129 +116,210 @@ export default function Create() {
   }, [startAt, daysCount, pause])
 
   return (
-    <div>
-      <div className="tabs">
-        <button className={`tab ${tab === 'workout' ? 'active' : ''}`} onClick={() => setTab('workout')}>
-          Тренировка
-        </button>
-        <button className={`tab ${tab === 'note' ? 'active' : ''}`} onClick={() => setTab('note')}>
-          Заметка
-        </button>
-      </div>
+    <div className="p-4">
+      {/* Tabs */}
+      <Card className="mb-4">
+        <div className="flex">
+          <button
+            className={`flex-1 py-4 text-center font-medium text-sm uppercase tracking-wide transition-colors ${
+              tab === 'workout' 
+                ? 'bg-primary text-primary-foreground' 
+                : 'bg-muted text-muted-foreground'
+            }`}
+            onClick={() => setTab('workout')}
+          >
+            Тренировка
+          </button>
+          <button
+            className={`flex-1 py-4 text-center font-medium text-sm uppercase tracking-wide transition-colors ${
+              tab === 'note' 
+                ? 'bg-primary text-primary-foreground' 
+                : 'bg-muted text-muted-foreground'
+            }`}
+            onClick={() => setTab('note')}
+          >
+            Заметка
+          </button>
+        </div>
+      </Card>
 
-      {msg && <div className="success-msg">{msg}</div>}
-      {error && <div className="error" style={{ padding: 16 }}>{error}</div>}
+      {msg && (
+        <div className="bg-green-100 text-green-700 px-4 py-3 rounded-xl mb-4 text-sm">
+          {msg}
+        </div>
+      )}
+      {error && (
+        <div className="bg-red-100 text-red-700 px-4 py-3 rounded-xl mb-4 text-sm">
+          {error}
+        </div>
+      )}
 
       {tab === 'workout' && (
-        <form onSubmit={submitWorkout} className="figma-card">
-          <div className="form-group">
-            <label className="form-label">Название</label>
-            <input className="input" value={name} onChange={e => setName(e.target.value)} required />
-          </div>
-
-          {/* periodic toggle */}
-          <label className="periodic-toggle">
-            <input type="checkbox" checked={periodic} onChange={e => { setPeriodic(e.target.checked); if (!e.target.checked) setPause(0) }} />
-            <span>Периодичная тренировка</span>
-          </label>
-
-          <div className="actions-row">
-            <div className="form-group" style={{ flex: 1 }}>
-              <label className="form-label">Дней тренировок</label>
-              <input className="input" type="number" min="1" max="7" value={daysCount}
-                onChange={e => setDaysCount(parseInt(e.target.value) || 1)} />
-            </div>
-            {periodic && (
-              <div className="form-group" style={{ flex: 1 }}>
-                <label className="form-label">Дней отдыха</label>
-                <input className="input" type="number" min="0" value={pause}
-                  onChange={e => setPause(parseInt(e.target.value) || 0)} />
+        <form onSubmit={submitWorkout}>
+          <Card className="mb-4">
+            <CardContent className="p-4 space-y-4">
+              <div>
+                <label className="block text-sm font-medium mb-2">Название</label>
+                <Input value={name} onChange={e => setName(e.target.value)} required />
               </div>
-            )}
-          </div>
 
-          {periodic && pause > 0 && (
-            <div className="schedule-hint">
-              Цикл: {daysCount} дн. тренировок → {pause} дн. отдыха → повтор
-            </div>
-          )}
+              {/* periodic toggle */}
+              <label className="flex items-center gap-3 cursor-pointer">
+                <input 
+                  type="checkbox" 
+                  checked={periodic} 
+                  onChange={e => { setPeriodic(e.target.checked); if (!e.target.checked) setPause(0) }}
+                  className="w-5 h-5 rounded border-border"
+                />
+                <span className="text-sm">Периодичная тренировка</span>
+              </label>
 
-          <div className="form-group">
-            <label className="form-label">Дата начала</label>
-            <input className="input" type="date" value={startAt}
-              onChange={e => setStartAt(e.target.value)} required />
-          </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium mb-2">Дней тренировок</label>
+                  <Input 
+                    type="number" 
+                    min="1" 
+                    max="7" 
+                    value={daysCount}
+                    onChange={e => setDaysCount(parseInt(e.target.value) || 1)} 
+                  />
+                </div>
+                {periodic && (
+                  <div>
+                    <label className="block text-sm font-medium mb-2">Дней отдыха</label>
+                    <Input 
+                      type="number" 
+                      min="0" 
+                      value={pause}
+                      onChange={e => setPause(parseInt(e.target.value) || 0)} 
+                    />
+                  </div>
+                )}
+              </div>
+
+              {periodic && pause > 0 && (
+                <p className="text-sm text-muted-foreground bg-muted px-3 py-2 rounded-lg">
+                  Цикл: {daysCount} дн. тренировок → {pause} дн. отдыха → повтор
+                </p>
+              )}
+
+              <div>
+                <label className="block text-sm font-medium mb-2">Дата начала</label>
+                <Input 
+                  type="date" 
+                  value={startAt}
+                  onChange={e => setStartAt(e.target.value)} 
+                  required 
+                />
+              </div>
+            </CardContent>
+          </Card>
 
           {/* schedule preview */}
           {periodic && schedulePreview.length > 0 && (
-            <div className="schedule-preview">
-              <label className="form-label">Расписание на 3 недели</label>
-              <div className="schedule-grid">
-                {DAY_NAMES.map(d => <div key={d} className="schedule-hdr">{d}</div>)}
-                {/* pad first row to correct weekday */}
-                {schedulePreview.length > 0 && Array.from({ length: schedulePreview[0].date.getDay() }, (_, i) => (
-                  <div key={`pad${i}`} className="schedule-cell schedule-empty" />
-                ))}
-                {schedulePreview.map((s, i) => (
-                  <div key={i} className={`schedule-cell ${s.isTraining ? 'schedule-train' : 'schedule-rest'}`}
-                    title={s.isTraining ? `День ${s.dayNum}` : 'Отдых'}>
-                    <span className="schedule-date">{s.date.getDate()}</span>
-                    {s.isTraining
-                      ? <span className="schedule-day-label">Д{s.dayNum}</span>
-                      : <span className="schedule-rest-label">—</span>}
-                  </div>
-                ))}
-              </div>
-            </div>
+            <Card className="mb-4">
+              <CardContent className="p-4">
+                <label className="block text-sm font-medium mb-3">Расписание на 3 недели</label>
+                <div className="grid grid-cols-7 gap-1 text-center">
+                  {DAY_NAMES.map(d => (
+                    <div key={d} className="text-xs text-muted-foreground font-medium py-1">{d}</div>
+                  ))}
+                  {/* pad first row to correct weekday */}
+                  {schedulePreview.length > 0 && Array.from({ length: schedulePreview[0].date.getDay() }, (_, i) => (
+                    <div key={`pad${i}`} />
+                  ))}
+                  {schedulePreview.map((s, i) => (
+                    <div 
+                      key={i} 
+                      className={`rounded-lg py-2 text-xs ${
+                        s.isTraining 
+                          ? 'bg-primary text-primary-foreground' 
+                          : 'bg-muted text-muted-foreground'
+                      }`}
+                      title={s.isTraining ? `День ${s.dayNum}` : 'Отдых'}
+                    >
+                      <div>{s.date.getDate()}</div>
+                      <div className="text-[10px]">
+                        {s.isTraining ? `Д${s.dayNum}` : '—'}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
           )}
 
-          <label className="form-label">Упражнения по дням</label>
-          <div className="day-tabs">
-            {Array.from({ length: daysCount }, (_, i) => i + 1).map(d => (
-              <button type="button" key={d}
-                className={`day-tab ${activeDay === d ? 'active' : ''}`}
-                onClick={() => setActiveDay(d)}>
-                День {d}
-              </button>
-            ))}
-          </div>
-
-          <div className="mt-12 mb-8">
-            {(days[dayKey] || []).map((ex, i) => (
-              <div className="ex-item" key={i}>
-                <div className="ex-info">
-                  <span>{ex.name}</span>
-                  <span className="ex-sets">{ex.sets} подх.</span>
-                </div>
-                <button type="button" className="ex-rm" onClick={() => removeExercise(dayKey, i)}>×</button>
+          <Card className="mb-4">
+            <CardContent className="p-4">
+              <label className="block text-sm font-medium mb-3">Упражнения по дням</label>
+              <div className="flex flex-wrap gap-2 mb-4">
+                {Array.from({ length: daysCount }, (_, i) => i + 1).map(d => (
+                  <button 
+                    type="button" 
+                    key={d}
+                    className={`px-4 py-2 rounded-full text-sm font-medium transition-colors ${
+                      activeDay === d 
+                        ? 'bg-primary text-primary-foreground' 
+                        : 'bg-muted text-muted-foreground hover:bg-muted/80'
+                    }`}
+                    onClick={() => setActiveDay(d)}
+                  >
+                    День {d}
+                  </button>
+                ))}
               </div>
-            ))}
-            {!(days[dayKey] || []).length && (
-              <div className="empty">
-                <p>Нет упражнений</p>
+
+              <div className="space-y-2 mb-4">
+                {(days[dayKey] || []).map((ex, i) => (
+                  <div 
+                    className="flex items-center justify-between bg-muted rounded-lg px-4 py-3" 
+                    key={i}
+                  >
+                    <div className="flex-1">
+                      <span className="font-medium">{ex.name}</span>
+                      <span className="text-muted-foreground ml-2">{ex.sets} подх.</span>
+                    </div>
+                    <button 
+                      type="button" 
+                      className="text-muted-foreground hover:text-destructive p-1"
+                      onClick={() => removeExercise(dayKey, i)}
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  </div>
+                ))}
+                {!(days[dayKey] || []).length && (
+                  <p className="text-center text-muted-foreground py-4">Нет упражнений</p>
+                )}
               </div>
-            )}
-          </div>
 
-          <AddExerciseRow exercises={exercises} onAdd={(id, name, sets) => addExercise(dayKey, id, name, sets)} />
+              <AddExerciseRow exercises={exercises} onAdd={(id, name, sets) => addExercise(dayKey, id, name, sets)} />
+            </CardContent>
+          </Card>
 
-          <button className="btn btn-primary btn-block mt-12" type="submit">
+          <Button className="w-full" type="submit">
             Создать тренировку
-          </button>
+          </Button>
         </form>
       )}
 
       {tab === 'note' && (
-        <form onSubmit={submitNote} className="figma-card">
-          <div className="form-group">
-            <label className="form-label">Что нового?</label>
-            <textarea className="input" rows={4} value={noteText}
-              onChange={e => setNoteText(e.target.value)} required
-              placeholder="Напишите что-нибудь..." />
-          </div>
-          <button className="btn btn-primary btn-block" type="submit">
+        <form onSubmit={submitNote}>
+          <Card className="mb-4">
+            <CardContent className="p-4">
+              <label className="block text-sm font-medium mb-2">Что нового?</label>
+              <Textarea 
+                value={noteText}
+                onChange={e => setNoteText(e.target.value)} 
+                required
+                placeholder="Напишите что-нибудь..." 
+              />
+            </CardContent>
+          </Card>
+          <Button className="w-full" type="submit">
             Опубликовать
-          </button>
+          </Button>
         </form>
       )}
     </div>
@@ -255,16 +341,26 @@ function AddExerciseRow({ exercises, onAdd }) {
   }
 
   return (
-    <div className="add-row">
-      <select value={selId} onChange={e => setSelId(e.target.value)}>
+    <div className="flex gap-2">
+      <select 
+        value={selId} 
+        onChange={e => setSelId(e.target.value)}
+        className="flex-1 h-11 rounded-lg border border-border bg-input px-3 text-sm"
+      >
         <option value="">Упражнение...</option>
         {exercises.map(ex => (
           <option key={ex.id} value={ex.id}>{ex.name}</option>
         ))}
       </select>
-      <input type="number" min="1" max="10" value={sets}
-        onChange={e => setSets(parseInt(e.target.value) || 1)} />
-      <button type="button" className="btn btn-sm btn-primary" onClick={add}>+</button>
+      <Input 
+        type="number" 
+        min="1" 
+        max="10" 
+        value={sets}
+        onChange={e => setSets(parseInt(e.target.value) || 1)}
+        className="w-16"
+      />
+      <Button type="button" onClick={add}>+</Button>
     </div>
   )
 }

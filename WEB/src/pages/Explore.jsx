@@ -3,6 +3,11 @@ import { Link } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { post, auth } from '../api'
 import WorkoutCard from '../components/WorkoutCard'
+import { Search, X, Loader2 } from 'lucide-react'
+import { Card, CardContent } from '../components/ui/Card'
+import { Input } from '../components/ui/Input'
+import { Button } from '../components/ui/Button'
+import { Avatar, AvatarFallback } from '../components/ui/Avatar'
 
 const RECENT_KEY = 'in_recent_searches'
 const MAX_RECENT = 8
@@ -67,93 +72,129 @@ export default function Explore() {
   const hasResults = cycleResults !== null || userResults !== null
 
   return (
-    <div>
-      <div className="search-bar">
-        <form onSubmit={handleSubmit}>
-          <div className="search-wrap">
-            <svg className="search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
-            </svg>
-            <input
-              className="search-input"
-              placeholder="Поиск тренировок и пользователей..."
-              value={query}
-              onChange={e => setQuery(e.target.value)}
-            />
-          </div>
-        </form>
-      </div>
+    <div className="p-4">
+      {/* Search bar */}
+      <form onSubmit={handleSubmit} className="mb-4">
+        <div className="relative">
+          <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
+          <Input
+            className="pl-12"
+            placeholder="Поиск тренировок и пользователей..."
+            value={query}
+            onChange={e => setQuery(e.target.value)}
+          />
+        </div>
+      </form>
 
       {/* Recent searches */}
       {!hasResults && !loading && recent.length > 0 && (
-        <div className="section">
-          <div className="section-title">
-            <span>Недавние</span>
-            <button className="btn btn-sm btn-outline" onClick={doClean}>Очистить</button>
-          </div>
-          <div className="recent-chips">
-            {recent.map(q => (
-              <button key={q} className="recent-chip" onClick={() => pickRecent(q)}>
-                {q}
-              </button>
-            ))}
-          </div>
-        </div>
+        <Card className="mb-4">
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between mb-3">
+              <span className="font-medium">Недавние</span>
+              <Button variant="ghost" size="sm" onClick={doClean}>
+                Очистить
+              </Button>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {recent.map(q => (
+                <button 
+                  key={q} 
+                  className="px-3 py-1.5 bg-muted rounded-full text-sm hover:bg-muted/80 transition-colors"
+                  onClick={() => pickRecent(q)}
+                >
+                  {q}
+                </button>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
       )}
 
+      {/* Search tabs */}
       {hasResults && !loading && (
-        <div className="search-tabs">
-          <button className={`search-tab ${searchTab === 'workouts' ? 'active' : ''}`}
-            onClick={() => setSearchTab('workouts')}>
+        <div className="flex bg-muted rounded-xl p-1 mb-4">
+          <button 
+            className={`flex-1 py-2 px-4 rounded-lg text-sm font-medium transition-colors ${
+              searchTab === 'workouts' 
+                ? 'bg-card shadow-sm' 
+                : 'text-muted-foreground'
+            }`}
+            onClick={() => setSearchTab('workouts')}
+          >
             Тренировки {cycleResults?.length ? `(${cycleResults.length})` : ''}
           </button>
-          <button className={`search-tab ${searchTab === 'users' ? 'active' : ''}`}
-            onClick={() => setSearchTab('users')}>
+          <button 
+            className={`flex-1 py-2 px-4 rounded-lg text-sm font-medium transition-colors ${
+              searchTab === 'users' 
+                ? 'bg-card shadow-sm' 
+                : 'text-muted-foreground'
+            }`}
+            onClick={() => setSearchTab('users')}
+          >
             Пользователи {userResults?.length ? `(${userResults.length})` : ''}
           </button>
         </div>
       )}
 
-      {loading && <div className="spinner">Поиск...</div>}
+      {/* Loading */}
+      {loading && (
+        <div className="flex items-center justify-center py-20">
+          <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
+        </div>
+      )}
 
+      {/* Workout results */}
       {hasResults && !loading && searchTab === 'workouts' && (
-        <div className="section" style={{ paddingTop: 0 }}>
+        <div>
           {cycleResults.length > 0 ? (
             cycleResults.map(c => (
               <WorkoutCard key={c.id} cycle={c} onIn={toggleIn} />
             ))
           ) : (
-            <div className="empty"><p>Тренировки не найдены</p></div>
+            <div className="text-center py-12 text-muted-foreground">
+              <p>Тренировки не найдены</p>
+            </div>
           )}
         </div>
       )}
 
+      {/* User results */}
       {hasResults && !loading && searchTab === 'users' && (
-        <div className="section" style={{ paddingTop: 0 }}>
+        <div className="space-y-2">
           {userResults.length > 0 ? (
             userResults.map(u => (
-              <Link to={`/user/${u.username}`} key={u.username} className="user-list-item">
-                <div className="avatar">{u.username[0]}</div>
-                <div className="user-list-info">
-                  <span className="user-list-name">{u.username}</span>
-                  {u.bio && <span className="user-list-bio">{u.bio}</span>}
-                  <span className="user-list-meta">
+              <Link 
+                to={`/user/${u.username}`} 
+                key={u.username} 
+                className="flex items-center gap-3 p-3 bg-card rounded-xl border border-border hover:bg-muted transition-colors"
+              >
+                <Avatar className="w-12 h-12">
+                  <AvatarFallback>{u.username[0]}</AvatarFallback>
+                </Avatar>
+                <div className="flex-1 min-w-0">
+                  <p className="font-medium">{u.username}</p>
+                  {u.bio && <p className="text-sm text-muted-foreground truncate">{u.bio}</p>}
+                  <p className="text-xs text-muted-foreground">
                     {u.cycles_count} тренировок · {u.followers_count} подписчиков
-                  </span>
+                  </p>
                 </div>
               </Link>
             ))
           ) : (
-            <div className="empty"><p>Пользователи не найдены</p></div>
+            <div className="text-center py-12 text-muted-foreground">
+              <p>Пользователи не найдены</p>
+            </div>
           )}
         </div>
       )}
 
+      {/* Empty state */}
       {!hasResults && !loading && (
-        <div className="empty">
-          <p style={{ fontSize: 36 }}>🔍</p>
-          <p>Найдите тренировки и пользователей</p>
-          <p>Нажмите Enter для поиска</p>
+        <div className="flex flex-col items-center justify-center py-20 text-center">
+          <span className="text-5xl mb-4">🔍</span>
+          <p className="text-lg font-medium">Найдите тренировки и пользователей</p>
+          <p className="text-muted-foreground">Нажмите Enter для поиска</p>
         </div>
       )}
     </div>

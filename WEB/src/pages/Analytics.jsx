@@ -2,6 +2,8 @@ import { useState, useEffect } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { post, auth } from '../api'
+import { ArrowLeft, Loader2 } from 'lucide-react'
+import { Card, CardContent } from '../components/ui/Card'
 
 export default function Analytics() {
   const { user } = useAuth()
@@ -27,58 +29,90 @@ export default function Analytics() {
   }, [cycleName, targetUser, user])
 
   return (
-    <div>
-      <div className="page-head">
-        <button className="back-btn" onClick={() => nav(-1)}>←</button>
-        <h1>Анализ: {cycleName}{targetUser ? ` (@${targetUser})` : ''}</h1>
+    <div className="p-4">
+      {/* Header */}
+      <div className="flex items-center gap-3 mb-4">
+        <button 
+          className="p-2 rounded-full hover:bg-muted transition-colors"
+          onClick={() => nav(-1)}
+        >
+          <ArrowLeft className="w-5 h-5" />
+        </button>
+        <div>
+          <h1 className="text-lg font-bold">Анализ: {cycleName}</h1>
+          {targetUser && <p className="text-sm text-muted-foreground">@{targetUser}</p>}
+        </div>
       </div>
 
-      {loading && <div className="spinner">Загрузка...</div>}
-      {error && <div className="error section">{error}</div>}
+      {loading && (
+        <div className="flex items-center justify-center py-20">
+          <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
+        </div>
+      )}
+      
+      {error && (
+        <Card className="mb-4 border-destructive">
+          <CardContent className="p-4 text-destructive">
+            {error}
+          </CardContent>
+        </Card>
+      )}
 
       {data && (
-        <div className="section">
+        <>
           {/* Muscle load */}
           {data.load_status && (
-            <>
-              <div className="section-title">Нагрузка на мышцы</div>
-              {Object.entries(data.load_status).map(([muscle, info]) => (
-                <div className="muscle-item" key={muscle}>
-                  <div className="muscle-name">
-                    <span>{muscle}</span>
-                    <span>{info.pr}%</span>
-                  </div>
-                  <div className="bar-bg">
-                    <div className="bar-fill"
-                      style={{
-                        width: `${Math.min(info.pr, 100)}%`,
-                        background: info.color || '#4caf50',
-                      }}
-                    />
-                  </div>
-                  <div className="muscle-status">{info.status}</div>
+            <Card className="mb-4">
+              <CardContent className="p-4">
+                <h2 className="font-bold mb-4">Нагрузка на мышцы</h2>
+                <div className="space-y-4">
+                  {Object.entries(data.load_status).map(([muscle, info]) => (
+                    <div key={muscle}>
+                      <div className="flex justify-between text-sm mb-1">
+                        <span className="font-medium">{muscle}</span>
+                        <span className="text-muted-foreground">{info.pr}%</span>
+                      </div>
+                      <div className="h-2 bg-muted rounded-full overflow-hidden">
+                        <div 
+                          className="h-full rounded-full transition-all"
+                          style={{
+                            width: `${Math.min(info.pr, 100)}%`,
+                            backgroundColor: info.color || '#4caf50',
+                          }}
+                        />
+                      </div>
+                      <p className="text-xs text-muted-foreground mt-1">{info.status}</p>
+                    </div>
+                  ))}
                 </div>
-              ))}
-            </>
+              </CardContent>
+            </Card>
           )}
 
           {/* Recommendations */}
           {data.recommendations?.length > 0 && (
-            <div style={{ marginTop: 24 }}>
-              <div className="section-title">Рекомендации</div>
-              {data.recommendations.map((rec, i) => (
-                <div className="rec-item" key={i}>
-                  {rec.message || rec}
+            <Card>
+              <CardContent className="p-4">
+                <h2 className="font-bold mb-4">Рекомендации</h2>
+                <div className="space-y-2">
+                  {data.recommendations.map((rec, i) => (
+                    <div 
+                      key={i} 
+                      className="p-3 bg-muted rounded-lg text-sm"
+                    >
+                      {rec.message || rec}
+                    </div>
+                  ))}
                 </div>
-              ))}
-            </div>
+              </CardContent>
+            </Card>
           )}
-        </div>
+        </>
       )}
 
       {!loading && !data && !error && (
-        <div className="empty">
-          <p>Не указана тренировка для анализа</p>
+        <div className="flex flex-col items-center justify-center py-20 text-center">
+          <p className="text-muted-foreground">Не указана тренировка для анализа</p>
         </div>
       )}
     </div>

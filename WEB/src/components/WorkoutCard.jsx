@@ -2,6 +2,11 @@ import { useState, useRef } from 'react'
 import { Link } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { post, auth } from '../api'
+import { MessageCircle } from 'lucide-react'
+import { Card, CardContent } from './ui/Card'
+import { Avatar, AvatarFallback } from './ui/Avatar'
+import { Button } from './ui/Button'
+import { Input } from './ui/Input'
 
 export default function WorkoutCard({ cycle, onIn, showAuthor = true, showDate = false }) {
   const { user } = useAuth()
@@ -59,89 +64,116 @@ export default function WorkoutCard({ cycle, onIn, showAuthor = true, showDate =
   }
 
   return (
-    <div className="card">
-      {showDate && cycle.start_at && (
-        <div className="card-date">{cycle.start_at}</div>
-      )}
-      {showAuthor && cycle.author && (
-        <div className="card-head">
-          <div className="avatar">{cycle.author.username?.[0]}</div>
-          <Link to={`/user/${cycle.author.username}`} className="card-user">
-            {cycle.author.username}
-          </Link>
-        </div>
-      )}
-      <div className="card-body">
-        <div className="card-title">{cycle.name}</div>
-        <div className="card-meta">
-          {cycle.days_count} дн · пауза {cycle.pause} дн
-        </div>
-        {cycle.original_author && (
-          <div className="original-author">
-            от <Link to={`/user/${cycle.original_author}`}>@{cycle.original_author}</Link>
+    <Card className="mb-4">
+      <CardContent className="p-4">
+        {showDate && cycle.start_at && (
+          <div className="text-xs text-muted-foreground mb-2">{cycle.start_at}</div>
+        )}
+        
+        {showAuthor && cycle.author && (
+          <div className="flex items-center gap-3 mb-3">
+            <Avatar className="w-10 h-10">
+              <AvatarFallback>{cycle.author.username?.[0]}</AvatarFallback>
+            </Avatar>
+            <Link 
+              to={`/user/${cycle.author.username}`} 
+              className="font-medium hover:underline"
+            >
+              {cycle.author.username}
+            </Link>
           </div>
         )}
-        {cycle.descriptions?.length > 0 && (
-          <ul className="card-desc">
-            {cycle.descriptions.map((d, i) => (
-              <li key={i} dangerouslySetInnerHTML={{ __html: d }} />
-            ))}
-          </ul>
-        )}
-      </div>
-      <div className="card-actions">
-        {onIn && (
-          <div className="in-btn-wrap"
-            onMouseEnter={handleMouseEnter}
-            onMouseLeave={handleMouseLeave}>
-            <button
-              className={`in-btn ${cycle.is_in ? 'active' : ''}`}
-              onClick={() => onIn(cycle)}
+
+        <div className="space-y-2">
+          <h3 className="font-bold text-lg">{cycle.name}</h3>
+          <p className="text-sm text-muted-foreground">
+            {cycle.days_count} дн · пауза {cycle.pause} дн
+          </p>
+          
+          {cycle.original_author && (
+            <p className="text-xs text-muted-foreground">
+              от <Link to={`/user/${cycle.original_author}`} className="text-primary hover:underline">@{cycle.original_author}</Link>
+            </p>
+          )}
+          
+          {cycle.descriptions?.length > 0 && (
+            <ul className="text-sm space-y-1 mt-3 pl-4 list-disc text-muted-foreground">
+              {cycle.descriptions.map((d, i) => (
+                <li key={i} dangerouslySetInnerHTML={{ __html: d }} />
+              ))}
+            </ul>
+          )}
+        </div>
+
+        <div className="flex items-center gap-3 mt-4 pt-4 border-t border-border">
+          {onIn && (
+            <div 
+              className="relative"
+              onMouseEnter={handleMouseEnter}
+              onMouseLeave={handleMouseLeave}
             >
-              <span className="in-label">IN</span>
-              <span className="in-count">{cycle.ins_count || 0}</span>
-            </button>
-            {showTooltip && inUsers && inUsers.length > 0 && (
-              <div className="in-tooltip">
-                {inUsers.slice(0, 10).map(u => (
-                  <span key={u}>{u}</span>
-                ))}
-                {inUsers.length > 10 && <span>+{inUsers.length - 10}</span>}
+              <button
+                className={`flex items-center gap-2 px-4 py-2 rounded-full font-bold text-sm transition-all ${
+                  cycle.is_in 
+                    ? 'bg-primary text-primary-foreground' 
+                    : 'bg-muted text-muted-foreground hover:bg-muted/80'
+                }`}
+                onClick={() => onIn(cycle)}
+              >
+                <span>IN</span>
+                <span>{cycle.ins_count || 0}</span>
+              </button>
+              
+              {showTooltip && inUsers && inUsers.length > 0 && (
+                <div className="absolute left-0 bottom-full mb-2 bg-card border border-border rounded-lg p-2 shadow-lg z-10 min-w-[120px]">
+                  {inUsers.slice(0, 10).map(u => (
+                    <span key={u} className="block text-xs py-0.5">{u}</span>
+                  ))}
+                  {inUsers.length > 10 && <span className="text-xs text-muted-foreground">+{inUsers.length - 10}</span>}
+                </div>
+              )}
+            </div>
+          )}
+          
+          <button 
+            className="p-2 rounded-full hover:bg-muted transition-colors"
+            onClick={toggleComments}
+          >
+            <MessageCircle className="w-5 h-5" />
+          </button>
+        </div>
+
+        {showComments && (
+          <div className="mt-4 pt-4 border-t border-border space-y-3">
+            {user && (
+              <form className="flex gap-2" onSubmit={submitComment}>
+                <Input
+                  className="flex-1"
+                  placeholder="Комментарий..."
+                  value={commentText}
+                  onChange={e => setCommentText(e.target.value)}
+                />
+                <Button type="submit" size="sm" disabled={!commentText.trim()}>→</Button>
+              </form>
+            )}
+            
+            {comments.length > 0 ? comments.map(c => (
+              <div className="flex items-start gap-2" key={c.id}>
+                <Link to={`/user/${c.user}`} className="font-medium text-sm hover:underline">{c.user}</Link>
+                <span className="text-sm flex-1">{c.text}</span>
+                {user && c.user === user.username && (
+                  <button 
+                    className="text-muted-foreground hover:text-destructive text-sm"
+                    onClick={() => deleteComment(c.id)}
+                  >×</button>
+                )}
               </div>
+            )) : (
+              <p className="text-sm text-muted-foreground text-center py-2">Нет комментариев</p>
             )}
           </div>
         )}
-        <button className="comment-toggle-btn" onClick={toggleComments}>
-          💬
-        </button>
-      </div>
-
-      {showComments && (
-        <div className="comments-section">
-          {user && (
-            <form className="comment-form" onSubmit={submitComment}>
-              <input
-                className="comment-input"
-                placeholder="Комментарий..."
-                value={commentText}
-                onChange={e => setCommentText(e.target.value)}
-              />
-              <button type="submit" className="comment-send" disabled={!commentText.trim()}>→</button>
-            </form>
-          )}
-          {comments.length > 0 ? comments.map(c => (
-            <div className="comment-item" key={c.id}>
-              <Link to={`/user/${c.user}`} className="comment-user">{c.user}</Link>
-              <span className="comment-text">{c.text}</span>
-              {user && c.user === user.username && (
-                <button className="comment-del" onClick={() => deleteComment(c.id)}>×</button>
-              )}
-            </div>
-          )) : (
-            <div className="comment-empty">Нет комментариев</div>
-          )}
-        </div>
-      )}
-    </div>
+      </CardContent>
+    </Card>
   )
 }

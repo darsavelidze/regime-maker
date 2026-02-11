@@ -3,6 +3,12 @@ import { useNavigate, Link } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { post, get, auth } from '../api'
 import WorkoutCard from '../components/WorkoutCard'
+import { MoreVertical, MessageCircle, LogOut, BarChart2, Loader2, Trash2, Check, X } from 'lucide-react'
+import { Card, CardContent } from '../components/ui/Card'
+import { Button } from '../components/ui/Button'
+import { Avatar, AvatarFallback } from '../components/ui/Avatar'
+import { Input, Textarea } from '../components/ui/Input'
+import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from '../components/ui/DropdownMenu'
 
 export default function Profile() {
   const { user, logout } = useAuth()
@@ -15,7 +21,6 @@ export default function Profile() {
   const [bio, setBio] = useState('')
   const [editBio, setEditBio] = useState(false)
   const [loading, setLoading] = useState(true)
-  const [menuOpen, setMenuOpen] = useState(null)
   const [noteComments, setNoteComments] = useState({})
   const [openComments, setOpenComments] = useState({})
   const [commentTexts, setCommentTexts] = useState({})
@@ -49,7 +54,6 @@ export default function Profile() {
 
   const deleteNote = async (name) => {
     if (!confirm('Удалить заметку?')) return
-    setMenuOpen(null)
     try {
       await post('/delete_note/', auth(user, { note_name: name }))
       load()
@@ -91,7 +95,13 @@ export default function Profile() {
 
   const doLogout = () => { logout(); nav('/login') }
 
-  if (loading) return <div className="spinner">Загрузка...</div>
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-20">
+        <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
+      </div>
+    )
+  }
 
   const timeAgo = (iso) => {
     if (!iso) return ''
@@ -105,72 +115,99 @@ export default function Profile() {
     return `${days} дн`
   }
 
-  return (
-    <div>
-      {/* Profile Card */}
-      <div className="prof-card">
-        <div className="prof-head">
-          <div className="avatar avatar-lg">{user.username[0]}</div>
-          <div className="prof-info">
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-              <div className="prof-name">{user.username}</div>
-              <button className="prof-logout" onClick={doLogout}>Выйти</button>
-            </div>
-            {editBio ? (
-              <div className="bio-form">
-                <textarea className="input" value={bio} onChange={e => setBio(e.target.value)}
-                  placeholder="О себе..." rows={2} />
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                  <button className="btn btn-sm btn-primary" onClick={saveBio}>✓</button>
-                  <button className="btn btn-sm btn-outline" onClick={() => setEditBio(false)}>✕</button>
-                </div>
-              </div>
-            ) : (
-              <div className="prof-bio" onClick={() => setEditBio(true)} style={{ cursor: 'pointer' }}>
-                {profile?.bio || 'Нажмите, чтобы добавить описание...'}
-              </div>
-            )}
-          </div>
-        </div>
+  const tabs = [
+    { id: 'workouts', label: 'Тренировки' },
+    { id: 'notes', label: 'Заметки' },
+    { id: 'followers', label: 'Подписчики' },
+    { id: 'following', label: 'Подписки' },
+  ]
 
-        <div className="prof-stats">
-          <div className="prof-stat">
-            <span className="n">{profile?.cycles_count || 0}</span>
-            <span className="l">тренировок</span>
+  return (
+    <div className="p-4">
+      {/* Header */}
+      <Card className="mb-4">
+        <CardContent className="p-6">
+          <div className="flex items-start gap-4">
+            <Avatar className="w-20 h-20">
+              <AvatarFallback className="text-2xl">{user.username[0]}</AvatarFallback>
+            </Avatar>
+            <div className="flex-1">
+              <h2 className="text-xl font-bold">{user.username}</h2>
+              {editBio ? (
+                <div className="mt-2 space-y-2">
+                  <Textarea 
+                    value={bio} 
+                    onChange={e => setBio(e.target.value)}
+                    placeholder="О себе..." 
+                    className="min-h-[80px]"
+                  />
+                  <div className="flex gap-2">
+                    <Button size="sm" onClick={saveBio}>
+                      <Check className="w-4 h-4" />
+                    </Button>
+                    <Button size="sm" variant="outline" onClick={() => setEditBio(false)}>
+                      <X className="w-4 h-4" />
+                    </Button>
+                  </div>
+                </div>
+              ) : (
+                <p 
+                  className="text-sm text-muted-foreground mt-1 cursor-pointer hover:text-foreground"
+                  onClick={() => setEditBio(true)}
+                >
+                  {profile?.bio || 'Нажмите, чтобы добавить описание...'}
+                </p>
+              )}
+            </div>
           </div>
-          <div className="prof-stat">
-            <span className="n">{profile?.total_ins || 0}</span>
-            <span className="l">IN</span>
+
+          {/* Stats */}
+          <div className="grid grid-cols-4 gap-2 mt-6">
+            <div className="text-center">
+              <p className="text-xl font-bold">{profile?.cycles_count || 0}</p>
+              <p className="text-xs text-muted-foreground">тренировок</p>
+            </div>
+            <div className="text-center">
+              <p className="text-xl font-bold">{profile?.total_ins || 0}</p>
+              <p className="text-xs text-muted-foreground">IN</p>
+            </div>
+            <button className="text-center hover:bg-muted rounded-lg py-1" onClick={() => setTab('followers')}>
+              <p className="text-xl font-bold">{profile?.followers_count || 0}</p>
+              <p className="text-xs text-muted-foreground">подписчиков</p>
+            </button>
+            <button className="text-center hover:bg-muted rounded-lg py-1" onClick={() => setTab('following')}>
+              <p className="text-xl font-bold">{profile?.following_count || 0}</p>
+              <p className="text-xs text-muted-foreground">подписок</p>
+            </button>
           </div>
-          <div className="prof-stat clickable" onClick={() => setTab('followers')}>
-            <span className="n">{profile?.followers_count || 0}</span>
-            <span className="l">подписчиков</span>
-          </div>
-          <div className="prof-stat clickable" onClick={() => setTab('following')}>
-            <span className="n">{profile?.following_count || 0}</span>
-            <span className="l">подписок</span>
-          </div>
-        </div>
-      </div>
+        </CardContent>
+      </Card>
 
       {/* Tabs */}
-      <div className="tabs">
-        <button className={`tab ${tab === 'workouts' ? 'active' : ''}`}
-          onClick={() => setTab('workouts')}>Тренировки</button>
-        <button className={`tab ${tab === 'notes' ? 'active' : ''}`}
-          onClick={() => setTab('notes')}>Заметки</button>
-        <button className={`tab ${tab === 'followers' ? 'active' : ''}`}
-          onClick={() => setTab('followers')}>Подписчики</button>
-        <button className={`tab ${tab === 'following' ? 'active' : ''}`}
-          onClick={() => setTab('following')}>Подписки</button>
+      <div className="flex bg-muted rounded-xl p-1 mb-4 overflow-x-auto">
+        {tabs.map(t => (
+          <button
+            key={t.id}
+            className={`flex-1 py-2 px-3 rounded-lg text-xs font-medium transition-colors whitespace-nowrap ${
+              tab === t.id 
+                ? 'bg-card shadow-sm text-foreground' 
+                : 'text-muted-foreground'
+            }`}
+            onClick={() => setTab(t.id)}
+          >
+            {t.label}
+          </button>
+        ))}
       </div>
 
       {/* Public workouts */}
       {tab === 'workouts' && (
-        <div className="section">
+        <div>
           {profile?.public_cycles?.length > 0 ? profile.public_cycles.map(c => (
             <div key={c.id}>
-              <WorkoutCard cycle={c} showAuthor={false}
+              <WorkoutCard 
+                cycle={c} 
+                showAuthor={false}
                 onIn={async (cycle) => {
                   const endpoint = cycle.is_in ? '/unlike_cycle/' : '/like_cycle/'
                   try {
@@ -184,82 +221,110 @@ export default function Profile() {
                       ),
                     }))
                   } catch {}
-                }} />
-              <div className="card-extra-actions">
-                <button className="btn btn-sm btn-outline"
+                }} 
+              />
+              <div className="flex justify-end -mt-2 mb-4">
+                <Button
+                  variant="outline"
+                  size="sm"
                   onClick={() => nav('/analytics', {
                     state: { cycleName: c.name, targetUser: user.username }
-                  })}>
-                  📊 Анализ
-                </button>
+                  })}
+                >
+                  <BarChart2 className="w-4 h-4 mr-1" />
+                  Анализ
+                </Button>
               </div>
             </div>
           )) : (
-            <div className="empty">
-              <p>Нет публичных тренировок</p>
-              <Link to="/workouts" className="btn btn-sm btn-primary mt-12">Мои тренировки</Link>
+            <div className="text-center py-12">
+              <p className="text-muted-foreground mb-4">Нет публичных тренировок</p>
+              <Link to="/workouts">
+                <Button size="sm">Мои тренировки</Button>
+              </Link>
             </div>
           )}
         </div>
       )}
 
-      {/* Notes as tweets */}
+      {/* Notes */}
       {tab === 'notes' && (
-        <div className="section">
+        <div className="space-y-4">
           {notes.length > 0 ? notes.map(n => (
-            <div className="tweet-card" key={n.id}>
-              <div className="tweet-head">
-                <div className="avatar">{user.username[0]}</div>
-                <div className="tweet-author">
-                  <span className="tweet-name">{user.username}</span>
-                  <span className="tweet-time">{timeAgo(n.created_at)}</span>
+            <Card key={n.id}>
+              <CardContent className="p-4">
+                <div className="flex items-start gap-3">
+                  <Avatar className="w-10 h-10">
+                    <AvatarFallback>{user.username[0]}</AvatarFallback>
+                  </Avatar>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2">
+                      <span className="font-medium">{user.username}</span>
+                      <span className="text-xs text-muted-foreground">{timeAgo(n.created_at)}</span>
+                    </div>
+                    <p className="mt-2 text-sm">{n.descriptions}</p>
+                  </div>
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <button className="p-1 rounded-full hover:bg-muted">
+                        <MoreVertical className="w-4 h-4" />
+                      </button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end">
+                      <DropdownMenuItem
+                        className="text-destructive focus:text-destructive"
+                        onClick={() => deleteNote(n.name)}
+                      >
+                        <Trash2 className="w-4 h-4 mr-2" />
+                        Удалить
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
                 </div>
-                <div className="dot-menu-wrap" style={{ marginLeft: 'auto' }}>
-                  <button className="dot-menu-btn"
-                    onClick={() => setMenuOpen(menuOpen === `n${n.id}` ? null : `n${n.id}`)}>
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="5" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="12" cy="19" r="1"/></svg>
+
+                <div className="mt-3 pt-3 border-t border-border">
+                  <button
+                    className="flex items-center gap-1 text-muted-foreground hover:text-foreground text-sm"
+                    onClick={() => toggleNoteComments(n.id)}
+                  >
+                    <MessageCircle className="w-4 h-4" />
+                    {(noteComments[n.id] || []).length || ''}
                   </button>
-                  {menuOpen === `n${n.id}` && (
-                    <div className="dot-menu-dropdown">
-                      <button className="danger" onClick={() => deleteNote(n.name)}>Удалить</button>
-                    </div>
-                  )}
                 </div>
-              </div>
-              <div className="tweet-body">{n.descriptions}</div>
-              <div className="tweet-actions">
-                <button className="comment-toggle-btn" onClick={() => toggleNoteComments(n.id)}>
-                  💬 {(noteComments[n.id] || []).length || ''}
-                </button>
-              </div>
-              {openComments[n.id] && (
-                <div className="comments-section">
-                  <form className="comment-form" onSubmit={(e) => submitNoteComment(e, n.id)}>
-                    <input
-                      className="comment-input"
-                      placeholder="Комментарий..."
-                      value={commentTexts[n.id] || ''}
-                      onChange={e => setCommentTexts(prev => ({ ...prev, [n.id]: e.target.value }))}
-                    />
-                    <button type="submit" className="comment-send"
-                      disabled={!(commentTexts[n.id] || '').trim()}>→</button>
-                  </form>
-                  {(noteComments[n.id] || []).length > 0 ? (noteComments[n.id]).map(c => (
-                    <div className="comment-item" key={c.id}>
-                      <Link to={`/user/${c.user}`} className="comment-user">{c.user}</Link>
-                      <span className="comment-text">{c.text}</span>
-                      {c.user === user.username && (
-                        <button className="comment-del" onClick={() => deleteComment(c.id, n.id)}>×</button>
-                      )}
-                    </div>
-                  )) : (
-                    <div className="comment-empty">Нет комментариев</div>
-                  )}
-                </div>
-              )}
-            </div>
+
+                {openComments[n.id] && (
+                  <div className="mt-3 pt-3 border-t border-border space-y-3">
+                    <form className="flex gap-2" onSubmit={(e) => submitNoteComment(e, n.id)}>
+                      <Input
+                        className="flex-1"
+                        placeholder="Комментарий..."
+                        value={commentTexts[n.id] || ''}
+                        onChange={e => setCommentTexts(prev => ({ ...prev, [n.id]: e.target.value }))}
+                      />
+                      <Button type="submit" size="sm" disabled={!(commentTexts[n.id] || '').trim()}>
+                        →
+                      </Button>
+                    </form>
+                    {(noteComments[n.id] || []).length > 0 ? (noteComments[n.id]).map(c => (
+                      <div className="flex items-start gap-2" key={c.id}>
+                        <Link to={`/user/${c.user}`} className="font-medium text-sm hover:underline">{c.user}</Link>
+                        <span className="text-sm flex-1">{c.text}</span>
+                        {c.user === user.username && (
+                          <button
+                            className="text-muted-foreground hover:text-destructive text-sm"
+                            onClick={() => deleteComment(c.id, n.id)}
+                          >×</button>
+                        )}
+                      </div>
+                    )) : (
+                      <p className="text-sm text-muted-foreground text-center py-2">Нет комментариев</p>
+                    )}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
           )) : (
-            <div className="empty">
+            <div className="text-center py-12 text-muted-foreground">
               <p>Нет заметок</p>
             </div>
           )}
@@ -268,32 +333,55 @@ export default function Profile() {
 
       {/* Followers */}
       {tab === 'followers' && (
-        <div className="section">
+        <div className="space-y-2">
           {followers.length > 0 ? followers.map(f => (
-            <Link to={f === user.username ? '/profile' : `/user/${f}`} key={f} className="user-list-item">
-              <div className="avatar avatar-md avatar-other">{f[0]}</div>
-              <span className="user-list-name">{f}</span>
+            <Link
+              to={f === user.username ? '/profile' : `/user/${f}`}
+              key={f}
+              className="flex items-center gap-3 p-3 bg-card rounded-xl border border-border hover:bg-muted transition-colors"
+            >
+              <Avatar>
+                <AvatarFallback>{f[0]}</AvatarFallback>
+              </Avatar>
+              <span className="font-medium">{f}</span>
             </Link>
           )) : (
-            <div className="empty"><p>Нет подписчиков</p></div>
+            <div className="text-center py-12 text-muted-foreground">
+              <p>Нет подписчиков</p>
+            </div>
           )}
         </div>
       )}
 
       {/* Following */}
       {tab === 'following' && (
-        <div className="section">
+        <div className="space-y-2">
           {following.length > 0 ? following.map(f => (
-            <Link to={f === user.username ? '/profile' : `/user/${f}`} key={f} className="user-list-item">
-              <div className="avatar avatar-md avatar-other">{f[0]}</div>
-              <span className="user-list-name">{f}</span>
+            <Link
+              to={f === user.username ? '/profile' : `/user/${f}`}
+              key={f}
+              className="flex items-center gap-3 p-3 bg-card rounded-xl border border-border hover:bg-muted transition-colors"
+            >
+              <Avatar>
+                <AvatarFallback>{f[0]}</AvatarFallback>
+              </Avatar>
+              <span className="font-medium">{f}</span>
             </Link>
           )) : (
-            <div className="empty"><p>Нет подписок</p></div>
+            <div className="text-center py-12 text-muted-foreground">
+              <p>Нет подписок</p>
+            </div>
           )}
         </div>
       )}
 
+      {/* Logout */}
+      <div className="mt-8 text-center">
+        <Button variant="outline" onClick={doLogout}>
+          <LogOut className="w-4 h-4 mr-2" />
+          Выйти
+        </Button>
+      </div>
     </div>
   )
 }
