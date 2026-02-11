@@ -18,13 +18,13 @@ export default function Feed() {
 
   useEffect(() => { load() }, [load])
 
-  const toggleLike = async (cycle) => {
-    const endpoint = cycle.is_liked ? '/unlike_cycle/' : '/like_cycle/'
+  const toggleIn = async (cycle) => {
+    const endpoint = cycle.is_in ? '/unlike_cycle/' : '/like_cycle/'
     try {
       const res = await post(endpoint, auth(user, { cycle_id: cycle.id }))
       setCycles(prev => prev.map(c =>
         c.id === cycle.id
-          ? { ...c, is_liked: !c.is_liked, likes_count: res.likes_count }
+          ? { ...c, is_in: !c.is_in, ins_count: res.ins_count }
           : c
       ))
     } catch {}
@@ -37,7 +37,7 @@ export default function Feed() {
       <div className="empty">
         <p style={{ fontSize: 40 }}>📭</p>
         <p>Лента пуста</p>
-        <p>Подпишитесь на пользователей, чтобы видеть их тренировки</p>
+        <p>Подпишитесь на пользователей или исследуйте тренировки</p>
       </div>
     )
   }
@@ -45,7 +45,7 @@ export default function Feed() {
   return (
     <div style={{ padding: '12px 0' }}>
       {cycles.map(c => (
-        <WorkoutCard key={c.id} cycle={c} onLike={toggleLike} />
+        <WorkoutCard key={c.id} cycle={c} onIn={toggleIn} showDate />
       ))}
     </div>
   )

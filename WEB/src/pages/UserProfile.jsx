@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
-import { useParams, useNavigate, Link } from 'react-router-dom'
+import { useParams, useNavigate, Link, Navigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { get, post, auth } from '../api'
 import WorkoutCard from '../components/WorkoutCard'
@@ -14,7 +14,6 @@ export default function UserProfile() {
   const [tab, setTab] = useState('workouts')
   const [followers, setFollowers] = useState([])
   const [following, setFollowing] = useState([])
-  const [cloneMsg, setCloneMsg] = useState('')
 
   const load = useCallback(async () => {
     try {
@@ -44,40 +43,28 @@ export default function UserProfile() {
     } catch {}
   }
 
-  const toggleLike = async (cycle) => {
-    const endpoint = cycle.is_liked ? '/unlike_cycle/' : '/like_cycle/'
+  const toggleIn = async (cycle) => {
+    const endpoint = cycle.is_in ? '/unlike_cycle/' : '/like_cycle/'
     try {
       const res = await post(endpoint, auth(user, { cycle_id: cycle.id }))
       setProfile(prev => ({
         ...prev,
         public_cycles: prev.public_cycles.map(c =>
           c.id === cycle.id
-            ? { ...c, is_liked: !c.is_liked, likes_count: res.likes_count }
+            ? { ...c, is_in: !c.is_in, ins_count: res.ins_count }
             : c
         ),
       }))
     } catch {}
   }
 
-  const cloneCycle = async (cycle) => {
-    const today = new Date().toISOString().split('T')[0]
-    try {
-      const res = await post('/clone_cycle/', auth(user, {
-        cycle_id: cycle.id,
-        start_at: today,
-      }))
-      setCloneMsg(res.verdict || 'Добавлено!')
-      setTimeout(() => setCloneMsg(''), 3000)
-    } catch (err) {
-      setCloneMsg(err.message || 'Ошибка')
-      setTimeout(() => setCloneMsg(''), 3000)
-    }
+  // Redirect to own profile
+  if (user?.username === username) {
+    return <Navigate to="/profile" replace />
   }
 
   if (loading) return <div className="spinner">Загрузка...</div>
   if (!profile) return <div className="empty"><p>Пользователь не найден</p></div>
-
-  const isOwn = user?.username === username
 
   return (
     <div>
@@ -92,19 +79,13 @@ export default function UserProfile() {
         <div className="prof-info">
           <div className="prof-name">{username}</div>
           {profile.bio && <div className="prof-bio">{profile.bio}</div>}
-          {!isOwn && user && (
+          {user && (
             <button
               className={`btn ${isFollowing ? 'btn-following' : 'btn-follow'}`}
               onClick={toggleFollow}
               style={{ marginTop: 8 }}
             >
               {isFollowing ? '✓ Подписка' : '+ Подписаться'}
-            </button>
-          )}
-          {isOwn && (
-            <button className="btn btn-sm btn-outline" onClick={() => nav('/profile')}
-              style={{ marginTop: 8 }}>
-              Мой профиль →
             </button>
           )}
         </div>
@@ -117,8 +98,8 @@ export default function UserProfile() {
           <span className="l">тренировок</span>
         </div>
         <div className="prof-stat">
-          <span className="n">{profile.total_likes || 0}</span>
-          <span className="l">лайков</span>
+          <span className="n">{profile.total_ins || 0}</span>
+          <span className="l">IN</span>
         </div>
         <div className="prof-stat clickable" onClick={() => setTab('followers')}>
           <span className="n">{profile.followers_count || 0}</span>
@@ -129,11 +110,6 @@ export default function UserProfile() {
           <span className="l">подписок</span>
         </div>
       </div>
-
-      {/* Clone success toast */}
-      {cloneMsg && (
-        <div className="toast">{cloneMsg}</div>
-      )}
 
       {/* Tabs */}
       <div className="tabs">
@@ -151,13 +127,9 @@ export default function UserProfile() {
           {profile.public_cycles?.length > 0 ? profile.public_cycles.map(c => (
             <div key={c.id}>
               <WorkoutCard cycle={c} showAuthor={false}
-                onLike={user ? toggleLike : null} />
-              {!isOwn && user && (
+                onIn={user ? toggleIn : null} />
+              {user && (
                 <div className="card-extra-actions">
-                  <button className="btn btn-sm btn-outline"
-                    onClick={() => cloneCycle(c)}>
-                    📥 Добавить к себе
-                  </button>
                   <button className="btn btn-sm btn-outline"
                     onClick={() => nav('/analytics', {
                       state: { cycleName: c.name, targetUser: username }
@@ -179,7 +151,7 @@ export default function UserProfile() {
       {tab === 'followers' && (
         <div className="section">
           {followers.length > 0 ? followers.map(f => (
-            <Link to={`/user/${f}`} key={f} className="user-list-item">
+            <Link to={f === user?.username ? '/profile' : `/user/${f}`} key={f} className="user-list-item">
               <div className="avatar">{f[0]}</div>
               <span className="user-list-name">{f}</span>
             </Link>
@@ -193,7 +165,7 @@ export default function UserProfile() {
       {tab === 'following' && (
         <div className="section">
           {following.length > 0 ? following.map(f => (
-            <Link to={`/user/${f}`} key={f} className="user-list-item">
+            <Link to={f === user?.username ? '/profile' : `/user/${f}`} key={f} className="user-list-item">
               <div className="avatar">{f[0]}</div>
               <span className="user-list-name">{f}</span>
             </Link>

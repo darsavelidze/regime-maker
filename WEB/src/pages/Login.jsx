@@ -29,7 +29,7 @@ export default function Login() {
   return (
     <div className="auth-page">
       <div className="auth-box">
-        <span className="logo">RegimeMaker</span>
+        <span className="logo">IN</span>
         <form onSubmit={submit}>
           <input className="input" placeholder="Имя пользователя" value={username}
             onChange={e => setUsername(e.target.value)} required />

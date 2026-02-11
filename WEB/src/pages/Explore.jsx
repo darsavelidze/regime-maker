@@ -30,13 +30,13 @@ export default function Explore() {
     finally { setLoading(false) }
   }
 
-  const toggleLike = async (cycle) => {
-    const endpoint = cycle.is_liked ? '/unlike_cycle/' : '/like_cycle/'
+  const toggleIn = async (cycle) => {
+    const endpoint = cycle.is_in ? '/unlike_cycle/' : '/like_cycle/'
     try {
       const res = await post(endpoint, auth(user, { cycle_id: cycle.id }))
       setCycleResults(prev => prev.map(c =>
         c.id === cycle.id
-          ? { ...c, is_liked: !c.is_liked, likes_count: res.likes_count }
+          ? { ...c, is_in: !c.is_in, ins_count: res.ins_count }
           : c
       ))
     } catch {}
@@ -76,7 +76,7 @@ export default function Explore() {
         <div style={{ padding: '0 0 12px' }}>
           {cycleResults.length > 0 ? (
             cycleResults.map(c => (
-              <WorkoutCard key={c.id} cycle={c} onLike={toggleLike} />
+              <WorkoutCard key={c.id} cycle={c} onIn={toggleIn} />
             ))
           ) : (
             <div className="empty"><p>Тренировки не найдены</p></div>

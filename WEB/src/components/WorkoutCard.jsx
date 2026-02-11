@@ -1,20 +1,11 @@
 import { Link } from 'react-router-dom'
 
-const HeartOutline = () => (
-  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/>
-  </svg>
-)
-
-const HeartFilled = () => (
-  <svg viewBox="0 0 24 24" fill="currentColor" stroke="none">
-    <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/>
-  </svg>
-)
-
-export default function WorkoutCard({ cycle, onLike, showAuthor = true }) {
+export default function WorkoutCard({ cycle, onIn, showAuthor = true, showDate = false }) {
   return (
     <div className="card">
+      {showDate && cycle.start_at && (
+        <div className="card-date">{cycle.start_at}</div>
+      )}
       {showAuthor && cycle.author && (
         <div className="card-head">
           <div className="avatar">{cycle.author.username?.[0]}</div>
@@ -30,7 +21,7 @@ export default function WorkoutCard({ cycle, onLike, showAuthor = true }) {
         </div>
         {cycle.original_author && (
           <div className="original-author">
-            📎 от <Link to={`/user/${cycle.original_author}`}>@{cycle.original_author}</Link>
+            от <Link to={`/user/${cycle.original_author}`}>@{cycle.original_author}</Link>
           </div>
         )}
         {cycle.descriptions?.length > 0 && (
@@ -41,14 +32,14 @@ export default function WorkoutCard({ cycle, onLike, showAuthor = true }) {
           </ul>
         )}
       </div>
-      {onLike && (
+      {onIn && (
         <div className="card-actions">
           <button
-            className={`like-btn ${cycle.is_liked ? 'liked' : ''}`}
-            onClick={() => onLike(cycle)}
+            className={`in-btn ${cycle.is_in ? 'active' : ''}`}
+            onClick={() => onIn(cycle)}
           >
-            {cycle.is_liked ? <HeartFilled /> : <HeartOutline />}
-            {cycle.likes_count}
+            <span className="in-label">IN</span>
+            <span className="in-count">{cycle.ins_count || 0}</span>
           </button>
         </div>
       )}

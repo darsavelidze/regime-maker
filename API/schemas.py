@@ -160,6 +160,15 @@ class SearchRequest(BaseModel):
     password: str = ""
 
 
+class MonthRequest(BaseModel):
+    """Schema for fetching month overview."""
+
+    year: int
+    month: int
+    user: str
+    password: str
+
+
 class CloneCycleRequest(BaseModel):
     """Schema for cloning a public cycle."""
 

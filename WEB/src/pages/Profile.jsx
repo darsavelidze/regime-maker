@@ -15,6 +15,7 @@ export default function Profile() {
   const [bio, setBio] = useState('')
   const [editBio, setEditBio] = useState(false)
   const [loading, setLoading] = useState(true)
+  const [menuOpen, setMenuOpen] = useState(null)
 
   const load = useCallback(async () => {
     try {
@@ -50,11 +51,14 @@ export default function Profile() {
     try {
       await post(endpoint, auth(user, { cycle_name: cycle.name }))
       load()
-    } catch {}
+    } catch (err) {
+      alert(err.message || 'Ошибка')
+    }
   }
 
   const deleteCycle = async (name) => {
     if (!confirm('Удалить тренировку?')) return
+    setMenuOpen(null)
     try {
       await post('/delete_cycle/', auth(user, { cycle_name: name }))
       load()
@@ -103,8 +107,8 @@ export default function Profile() {
           <span className="l">тренировок</span>
         </div>
         <div className="prof-stat">
-          <span className="n">{profile?.total_likes || 0}</span>
-          <span className="l">лайков</span>
+          <span className="n">{profile?.total_ins || 0}</span>
+          <span className="l">IN</span>
         </div>
         <div className="prof-stat clickable" onClick={() => setTab('followers')}>
           <span className="n">{profile?.followers_count || 0}</span>
@@ -140,13 +144,21 @@ export default function Profile() {
                     {c.is_public ? 'Публичная' : 'Приватная'}
                   </span>
                 </h3>
+                <div className="dot-menu-wrap">
+                  <button className="dot-menu-btn" onClick={() => setMenuOpen(menuOpen === c.id ? null : c.id)}>⋮</button>
+                  {menuOpen === c.id && (
+                    <div className="dot-menu-dropdown">
+                      <button onClick={() => deleteCycle(c.name)}>Удалить</button>
+                    </div>
+                  )}
+                </div>
               </div>
               <div className="card-meta">
                 {c.days_count} дн · пауза {c.pause} дн · с {c.start_at}
               </div>
               {c.original_author && (
                 <div className="original-author">
-                  📎 от <Link to={`/user/${c.original_author}`}>@{c.original_author}</Link>
+                  от <Link to={`/user/${c.original_author}`}>@{c.original_author}</Link>
                 </div>
               )}
               {c.descriptions?.length > 0 && (
@@ -157,17 +169,15 @@ export default function Profile() {
                 </ul>
               )}
               <div className="own-card-actions">
-                <button className="btn btn-sm btn-outline"
-                  onClick={() => togglePublish(c)}>
-                  {c.is_public ? '🔒 Скрыть' : '🌐 Опубликовать'}
-                </button>
+                {!c.original_author && (
+                  <button className="btn btn-sm btn-outline"
+                    onClick={() => togglePublish(c)}>
+                    {c.is_public ? '🔒 Скрыть' : '🌐 Опубликовать'}
+                  </button>
+                )}
                 <button className="btn btn-sm btn-outline"
                   onClick={() => nav('/analytics', { state: { cycleName: c.name } })}>
                   📊 Анализ
-                </button>
-                <button className="btn btn-sm btn-danger"
-                  onClick={() => deleteCycle(c.name)}>
-                  Удалить
                 </button>
               </div>
             </div>
@@ -186,9 +196,14 @@ export default function Profile() {
             <div className="card" key={i} style={{ padding: 16 }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <div className="note-title">{n.name}</div>
-                <button className="btn btn-sm btn-danger" onClick={() => deleteNote(n.name)}>
-                  Удалить
-                </button>
+                <div className="dot-menu-wrap">
+                  <button className="dot-menu-btn" onClick={() => setMenuOpen(menuOpen === `n${i}` ? null : `n${i}`)}>⋮</button>
+                  {menuOpen === `n${i}` && (
+                    <div className="dot-menu-dropdown">
+                      <button onClick={() => { setMenuOpen(null); deleteNote(n.name) }}>Удалить</button>
+                    </div>
+                  )}
+                </div>
               </div>
               <div className="note-body">{n.descriptions}</div>
             </div>
@@ -204,7 +219,7 @@ export default function Profile() {
       {tab === 'followers' && (
         <div className="section">
           {followers.length > 0 ? followers.map(f => (
-            <Link to={`/user/${f}`} key={f} className="user-list-item">
+            <Link to={f === user.username ? '/profile' : `/user/${f}`} key={f} className="user-list-item">
               <div className="avatar">{f[0]}</div>
               <span className="user-list-name">{f}</span>
             </Link>
@@ -218,7 +233,7 @@ export default function Profile() {
       {tab === 'following' && (
         <div className="section">
           {following.length > 0 ? following.map(f => (
-            <Link to={`/user/${f}`} key={f} className="user-list-item">
+            <Link to={f === user.username ? '/profile' : `/user/${f}`} key={f} className="user-list-item">
               <div className="avatar">{f[0]}</div>
               <span className="user-list-name">{f}</span>
             </Link>

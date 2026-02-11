@@ -37,7 +37,7 @@ export default function Layout() {
   return (
     <div className="app">
       <header className="header">
-        <span className="logo">RegimeMaker</span>
+        <span className="logo">IN</span>
       </header>
       <main className="main">
         <Outlet />

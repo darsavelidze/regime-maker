@@ -34,9 +34,11 @@ from schemas import (
     UpdateProfileRequest,
     FeedRequest,
     SearchRequest,
+    MonthRequest,
     CloneCycleRequest,
     AnalyticsPublicRequest,
 )
+import calendar as cal_mod
 from auth import hash_password, authenticate_user
 
 # --------------- Logging ---------------
@@ -49,7 +51,7 @@ logger = logging.getLogger("regime-maker")
 
 # --------------- App ---------------
 
-app = FastAPI(title="RegimeMaker API", version="3.0.0")
+app = FastAPI(title="IN API", version="4.0.0")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -91,10 +93,10 @@ def get_db():
 
 def _cycle_to_dict(cycle: Cycle, db: Session, current_user: str = "") -> dict:
     """Convert a Cycle ORM object to a response dict with social stats."""
-    likes_count = db.query(Like).filter(Like.cycle_id == cycle.id).count()
-    is_liked = False
+    ins_count = db.query(Like).filter(Like.cycle_id == cycle.id).count()
+    is_in = False
     if current_user:
-        is_liked = (
+        is_in = (
             db.query(Like)
             .filter(Like.cycle_id == cycle.id, Like.user == current_user)
             .first()
@@ -113,8 +115,8 @@ def _cycle_to_dict(cycle: Cycle, db: Session, current_user: str = "") -> dict:
         "start_at": cycle.start_at,
         "is_public": bool(getattr(cycle, "is_public", 0)),
         "original_author": getattr(cycle, "original_author", "") or "",
-        "likes_count": likes_count,
-        "is_liked": is_liked,
+        "ins_count": ins_count,
+        "is_in": is_in,
         "author": {
             "username": cycle.user,
             "bio": getattr(author, "bio", "") or "" if author else "",
@@ -259,6 +261,36 @@ async def duty(body: DutyRequest, db: Session = Depends(get_db)):
     user_obj.days = new_days.copy()
     db.commit()
     return {"verdict": "Successful change of duty completion.", "duties": user_obj.days.copy()}
+
+
+@app.post("/month_duties/")
+async def month_duties(body: MonthRequest, db: Session = Depends(get_db)):
+    """Get duty counts for each day in a month (for calendar coloring)."""
+    authenticate_user(body.user, body.password, db)
+    user_cycles = list(db.query(Cycle).filter(Cycle.user == body.user).all())
+    _, days_in_month = cal_mod.monthrange(body.year, body.month)
+    result = {}
+    for d in range(1, days_in_month + 1):
+        date = datetime.date(body.year, body.month, d)
+        date_str = date.isoformat()
+        count = 0
+        for cycle in user_cycles:
+            try:
+                cycle_date = datetime.datetime.strptime(cycle.start_at, "%Y-%m-%d").date()
+            except (ValueError, TypeError):
+                continue
+            days_diff = (date - cycle_date).days
+            total = cycle.days_count + cycle.pause
+            if total <= 0:
+                continue
+            day_index = days_diff % total
+            try:
+                if cycle.descriptions[abs(day_index)] and cycle.descriptions[abs(day_index)] != "Нет упражнений":
+                    count += 1
+            except (IndexError, TypeError):
+                pass
+        result[date_str] = count
+    return {"days": result, "max": max(result.values()) if result else 0}
 
 
 # ======================== NOTES ========================
@@ -408,11 +440,13 @@ async def exercises():
 
 @app.post("/publish_cycle/")
 async def publish_cycle(body: PublishCycleRequest, db: Session = Depends(get_db)):
-    """Make a training cycle public."""
+    """Make a training cycle public. Only original (non-cloned) cycles can be published."""
     authenticate_user(body.user, body.password, db)
     cycle = db.query(Cycle).filter(Cycle.user == body.user, Cycle.name == body.cycle_name).first()
     if not cycle:
         raise HTTPException(status_code=404, detail="Cycle not found.")
+    if getattr(cycle, "original_author", ""):
+        raise HTTPException(status_code=403, detail="Cloned cycles cannot be published. Only your own creations can be public.")
     cycle.is_public = 1
     db.commit()
     logger.info("Cycle published: %s by %s", body.cycle_name, body.user)
@@ -493,19 +527,35 @@ async def get_following(username: str, db: Session = Depends(get_db)):
 
 @app.post("/like_cycle/")
 async def like_cycle(body: LikeCycleRequest, db: Session = Depends(get_db)):
-    """Like a public training cycle."""
+    """IN a public training cycle — marks it and clones to user's private list."""
     authenticate_user(body.user, body.password, db)
     cycle = db.query(Cycle).filter(Cycle.id == body.cycle_id, Cycle.is_public == 1).first()
     if not cycle:
         raise HTTPException(status_code=404, detail="Public cycle not found.")
     existing = db.query(Like).filter(Like.user == body.user, Like.cycle_id == body.cycle_id).first()
     if existing:
-        raise HTTPException(status_code=409, detail="Already liked.")
+        raise HTTPException(status_code=409, detail="Already IN.")
     db.add(Like(user=body.user, cycle_id=body.cycle_id))
+    # Clone to user's private workouts
+    if cycle.user != body.user:
+        original = getattr(cycle, "original_author", "") or cycle.user
+        base_name = cycle.name
+        new_name = base_name
+        counter = 1
+        while db.query(Cycle).filter(Cycle.user == body.user, Cycle.name == new_name).first():
+            counter += 1
+            new_name = f"{base_name} ({counter})"
+        today = datetime.date.today().isoformat()
+        new_cycle = Cycle(
+            name=new_name, user=body.user, days_count=cycle.days_count,
+            pause=cycle.pause, descriptions=cycle.descriptions, data=cycle.data,
+            start_at=today, is_public=0, original_author=original,
+        )
+        db.add(new_cycle)
     db.commit()
-    likes_count = db.query(Like).filter(Like.cycle_id == body.cycle_id).count()
-    logger.info("%s liked cycle #%d", body.user, body.cycle_id)
-    return {"verdict": "Liked.", "likes_count": likes_count}
+    ins_count = db.query(Like).filter(Like.cycle_id == body.cycle_id).count()
+    logger.info("%s IN cycle #%d", body.user, body.cycle_id)
+    return {"verdict": "IN!", "ins_count": ins_count}
 
 
 @app.post("/unlike_cycle/")
@@ -517,9 +567,9 @@ async def unlike_cycle(body: LikeCycleRequest, db: Session = Depends(get_db)):
         raise HTTPException(status_code=404, detail="Like not found.")
     db.delete(like_obj)
     db.commit()
-    likes_count = db.query(Like).filter(Like.cycle_id == body.cycle_id).count()
-    logger.info("%s unliked cycle #%d", body.user, body.cycle_id)
-    return {"verdict": "Unliked.", "likes_count": likes_count}
+    ins_count = db.query(Like).filter(Like.cycle_id == body.cycle_id).count()
+    logger.info("%s un-IN cycle #%d", body.user, body.cycle_id)
+    return {"verdict": "Removed.", "ins_count": ins_count}
 
 
 # ======================== SOCIAL: FEED & SEARCH ========================
@@ -527,18 +577,29 @@ async def unlike_cycle(body: LikeCycleRequest, db: Session = Depends(get_db)):
 
 @app.post("/feed/")
 async def feed(body: FeedRequest, db: Session = Depends(get_db)):
-    """Get public cycles from users the authenticated user follows."""
+    """Get public cycles: from followed users, or top by IN count globally."""
+    from sqlalchemy import func
     authenticate_user(body.user, body.password, db)
     following = [f.following for f in db.query(Follow).filter(Follow.follower == body.user)]
-    if not following:
-        return {"verdict": "Feed is empty. Follow some users!", "cycles": []}
-    cycles = (
-        db.query(Cycle)
-        .filter(Cycle.user.in_(following), Cycle.is_public == 1)
-        .order_by(Cycle.id.desc())
-        .limit(50)
-        .all()
-    )
+    if following:
+        cycles = (
+            db.query(Cycle)
+            .filter(Cycle.user.in_(following), Cycle.is_public == 1)
+            .order_by(Cycle.id.desc())
+            .limit(50)
+            .all()
+        )
+    else:
+        # No subscriptions — show global top by IN count
+        cycles = (
+            db.query(Cycle)
+            .outerjoin(Like, Like.cycle_id == Cycle.id)
+            .filter(Cycle.is_public == 1)
+            .group_by(Cycle.id)
+            .order_by(func.count(Like.id).desc(), Cycle.id.desc())
+            .limit(50)
+            .all()
+        )
     result = [_cycle_to_dict(c, db, body.user) for c in cycles]
     return {"verdict": f"Feed loaded. {len(result)} cycles.", "cycles": result}
 
@@ -725,7 +786,7 @@ async def get_profile(username: str, db: Session = Depends(get_db)):
     public_cycle_ids = [
         c.id for c in db.query(Cycle).filter(Cycle.user == username, Cycle.is_public == 1)
     ]
-    total_likes = (
+    total_ins = (
         db.query(Like).filter(Like.cycle_id.in_(public_cycle_ids)).count()
         if public_cycle_ids
         else 0
@@ -744,7 +805,7 @@ async def get_profile(username: str, db: Session = Depends(get_db)):
         "followers_count": followers_count,
         "following_count": following_count,
         "notes_count": notes_count,
-        "total_likes": total_likes,
+        "total_ins": total_ins,
         "public_cycles": cycles_data,
     }
 

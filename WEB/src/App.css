@@ -115,14 +115,20 @@ textarea.input { resize: vertical; min-height: 80px; font-family: inherit; }
   display: flex; align-items: center; gap: 16px;
 }
 
-/* ─── Like ─── */
-.like-btn {
-  background: none; border: none; cursor: pointer;
-  display: inline-flex; align-items: center; gap: 6px;
-  font-size: 14px; color: var(--text); padding: 4px 0; font-weight: 600;
+/* ─── IN button ─── */
+.in-btn {
+  background: none; border: 1.5px solid var(--border); border-radius: 6px;
+  cursor: pointer; display: inline-flex; align-items: center; gap: 6px;
+  font-size: 13px; color: var(--text); padding: 5px 12px; font-weight: 700;
+  transition: all .15s;
 }
-.like-btn.liked { color: var(--red); }
-.like-btn svg { width: 22px; height: 22px; }
+.in-btn:hover { border-color: var(--text-2); }
+.in-btn.active { background: var(--text); color: #fff; border-color: var(--text); }
+.in-label { letter-spacing: .5px; }
+.in-count { font-weight: 600; opacity: .7; }
+
+/* ─── Card date ─── */
+.card-date { font-size: 11px; color: var(--text-2); padding: 0 16px 8px; }
 
 /* ─── Profile ─── */
 .prof-head { padding: 20px 16px; display: flex; align-items: flex-start; gap: 24px; }
@@ -311,3 +317,67 @@ textarea.input { resize: vertical; min-height: 80px; font-family: inherit; }
 /* ─── Clickable stat ─── */
 .prof-stat.clickable { cursor: pointer; }
 .prof-stat.clickable:hover { opacity: .7; }
+
+/* ─── Calendar ─── */
+.cal-header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 12px 16px;
+}
+.cal-nav {
+  background: none; border: none; cursor: pointer;
+  font-size: 20px; padding: 4px 10px; color: var(--text); font-weight: 600;
+}
+.cal-nav:hover { opacity: .6; }
+.cal-title { font-size: 15px; font-weight: 700; text-transform: capitalize; }
+.cal-weekdays {
+  display: grid; grid-template-columns: repeat(7, 1fr);
+  padding: 0 16px 4px; gap: 4px;
+}
+.cal-weekday {
+  text-align: center; font-size: 11px; font-weight: 600;
+  color: var(--text-2); text-transform: uppercase; letter-spacing: .5px;
+}
+.cal-grid {
+  display: grid; grid-template-columns: repeat(7, 1fr);
+  padding: 0 16px 12px; gap: 4px;
+}
+.cal-cell {
+  aspect-ratio: 1; border-radius: 10px; display: flex;
+  flex-direction: column; align-items: center; justify-content: center;
+  cursor: pointer; border: none; background: transparent;
+  position: relative; font-size: 14px; font-weight: 500; color: var(--text);
+  transition: all .15s;
+}
+.cal-cell:hover { background: #f0f0f0; }
+.cal-cell.empty { pointer-events: none; }
+.cal-cell.selected {
+  outline: 2px solid var(--text); outline-offset: -2px;
+}
+.cal-cell.today .cal-day-label { font-weight: 800; }
+.cal-day-label { font-size: 13px; z-index: 1; }
+.cal-dot {
+  width: 5px; height: 5px; border-radius: 50%;
+  position: absolute; bottom: 5px;
+}
+
+/* ─── Dot menu ─── */
+.dot-menu-wrap { position: relative; }
+.dot-menu-btn {
+  background: none; border: none; cursor: pointer;
+  font-size: 20px; padding: 2px 8px; color: var(--text-2);
+  letter-spacing: 1px; line-height: 1;
+}
+.dot-menu-btn:hover { color: var(--text); }
+.dot-menu-dropdown {
+  position: absolute; right: 0; top: 100%; min-width: 140px;
+  background: var(--card); border: 1px solid var(--border);
+  border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,.1);
+  z-index: 200; overflow: hidden;
+}
+.dot-menu-dropdown button {
+  display: block; width: 100%; padding: 10px 16px;
+  background: none; border: none; text-align: left;
+  font-size: 14px; cursor: pointer; color: var(--text);
+}
+.dot-menu-dropdown button:hover { background: var(--bg); }
+.dot-menu-dropdown .danger { color: var(--red); }
