@@ -7,7 +7,7 @@
   --blue: #0095f6;
   --red: #ed4956;
   --green: #4caf50;
-  --nav-h: 52px;
+  --nav-h: 48px;
   --head-h: 54px;
   --max-w: 470px;
 }
@@ -41,13 +41,14 @@ body {
   height: var(--nav-h); background: var(--card);
   border-top: 1px solid var(--border);
   display: flex; justify-content: space-around; align-items: center; z-index: 100;
+  max-width: var(--max-w); margin: 0 auto;
 }
 .nav-item {
-  display: flex; flex-direction: column; align-items: center; gap: 2px;
-  text-decoration: none; color: var(--text-2); font-size: 10px; padding: 4px 12px;
+  display: flex; flex-direction: column; align-items: center; gap: 1px;
+  text-decoration: none; color: var(--text-2); font-size: 9px; padding: 4px 10px;
 }
 .nav-item.active { color: var(--text); }
-.nav-item svg { width: 24px; height: 24px; }
+.nav-item svg { width: 20px; height: 20px; }
 
 /* ─── Auth ─── */
 .auth-page {
@@ -226,9 +227,9 @@ textarea.input { resize: vertical; min-height: 80px; font-family: inherit; }
 
 /* ─── Misc ─── */
 .page-head {
-  position: sticky; top: 0; height: var(--head-h); background: var(--card);
+  position: sticky; top: var(--head-h); height: var(--head-h); background: var(--card);
   border-bottom: 1px solid var(--border); display: flex; align-items: center;
-  padding: 0 16px; gap: 12px; z-index: 100;
+  padding: 0 16px; gap: 12px; z-index: 90;
 }
 .page-head h1 { font-size: 17px; font-weight: 700; flex: 1; }
 .back-btn { background: none; border: none; cursor: pointer; font-size: 22px; padding: 4px; color: var(--text); }

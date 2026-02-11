@@ -27,9 +27,9 @@ export default function App() {
         <Route path="create" element={<Create />} />
         <Route path="day" element={<Day />} />
         <Route path="profile" element={<Profile />} />
+        <Route path="user/:username" element={<UserProfile />} />
+        <Route path="analytics" element={<Analytics />} />
       </Route>
-      <Route path="/user/:username" element={<Private><UserProfile /></Private>} />
-      <Route path="/analytics" element={<Private><Analytics /></Private>} />
     </Routes>
   )
 }
