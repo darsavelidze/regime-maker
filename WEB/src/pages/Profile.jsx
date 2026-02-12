@@ -2,13 +2,13 @@ import { useState, useEffect, useCallback } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { post, get, auth } from '../api'
-import WorkoutCard from '../components/WorkoutCard'
-import { MoreVertical, MessageCircle, LogOut, BarChart2, Loader2, Trash2, Check, X } from 'lucide-react'
+import { MoreVertical, LogOut, BarChart2, Loader2, Trash2, Check, X, EyeOff, MessageCircle } from 'lucide-react'
 import { Card, CardContent } from '../components/ui/Card'
 import { Button } from '../components/ui/Button'
 import { Avatar, AvatarFallback } from '../components/ui/Avatar'
-import { Input, Textarea } from '../components/ui/Input'
+import { Textarea } from '../components/ui/Input'
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from '../components/ui/DropdownMenu'
+import CommentSection from '../components/CommentSection'
 
 export default function Profile() {
   const { user, logout } = useAuth()
@@ -21,9 +21,7 @@ export default function Profile() {
   const [bio, setBio] = useState('')
   const [editBio, setEditBio] = useState(false)
   const [loading, setLoading] = useState(true)
-  const [noteComments, setNoteComments] = useState({})
   const [openComments, setOpenComments] = useState({})
-  const [commentTexts, setCommentTexts] = useState({})
 
   const load = useCallback(async () => {
     try {
@@ -57,39 +55,6 @@ export default function Profile() {
     try {
       await post('/delete_note/', auth(user, { note_name: name }))
       load()
-    } catch {}
-  }
-
-  const loadNoteComments = async (noteId) => {
-    try {
-      const res = await post('/get_comments/', { target_type: 'note', target_id: noteId })
-      setNoteComments(prev => ({ ...prev, [noteId]: res.comments || [] }))
-    } catch {}
-  }
-
-  const toggleNoteComments = (noteId) => {
-    const isOpen = openComments[noteId]
-    if (!isOpen) loadNoteComments(noteId)
-    setOpenComments(prev => ({ ...prev, [noteId]: !isOpen }))
-  }
-
-  const submitNoteComment = async (e, noteId) => {
-    e.preventDefault()
-    const text = (commentTexts[noteId] || '').trim()
-    if (!text) return
-    try {
-      await post('/create_comment/', auth(user, {
-        target_type: 'note', target_id: noteId, text,
-      }))
-      setCommentTexts(prev => ({ ...prev, [noteId]: '' }))
-      loadNoteComments(noteId)
-    } catch {}
-  }
-
-  const deleteComment = async (commentId, noteId) => {
-    try {
-      await post('/delete_comment/', auth(user, { comment_id: commentId }))
-      loadNoteComments(noteId)
     } catch {}
   }
 
@@ -127,11 +92,11 @@ export default function Profile() {
       {/* Header */}
       <Card className="mb-4">
         <CardContent className="p-6">
-          <div className="flex items-start gap-4">
-            <Avatar className="w-20 h-20">
+          <div className="flex items-center gap-4">
+            <Avatar className="w-20 h-20 flex-shrink-0">
               <AvatarFallback className="text-2xl">{user.username[0]}</AvatarFallback>
             </Avatar>
-            <div className="flex-1">
+            <div className="flex-1 min-w-0">
               <h2 className="text-xl font-bold">{user.username}</h2>
               {editBio ? (
                 <div className="mt-2 space-y-2">
@@ -159,15 +124,19 @@ export default function Profile() {
                 </p>
               )}
             </div>
+            <Button variant="outline" size="sm" onClick={doLogout} className="flex-shrink-0">
+              <LogOut className="w-4 h-4 mr-1" />
+              Выйти
+            </Button>
           </div>
 
           {/* Stats */}
           <div className="grid grid-cols-4 gap-2 mt-6">
-            <div className="text-center">
+            <div className="text-center py-1">
               <p className="text-xl font-bold">{profile?.cycles_count || 0}</p>
               <p className="text-xs text-muted-foreground">тренировок</p>
             </div>
-            <div className="text-center">
+            <div className="text-center py-1">
               <p className="text-xl font-bold">{profile?.total_ins || 0}</p>
               <p className="text-xs text-muted-foreground">IN</p>
             </div>
@@ -202,40 +171,125 @@ export default function Profile() {
 
       {/* Public workouts */}
       {tab === 'workouts' && (
-        <div>
+        <div className="space-y-4">
           {profile?.public_cycles?.length > 0 ? profile.public_cycles.map(c => (
-            <div key={c.id}>
-              <WorkoutCard 
-                cycle={c} 
-                showAuthor={false}
-                onIn={async (cycle) => {
-                  const endpoint = cycle.is_in ? '/unlike_cycle/' : '/like_cycle/'
-                  try {
-                    const res = await post(endpoint, auth(user, { cycle_id: cycle.id }))
-                    setProfile(prev => ({
-                      ...prev,
-                      public_cycles: prev.public_cycles.map(cc =>
-                        cc.id === cycle.id
-                          ? { ...cc, is_in: !cc.is_in, ins_count: res.ins_count }
-                          : cc
-                      ),
-                    }))
-                  } catch {}
-                }} 
-              />
-              <div className="flex justify-end -mt-2 mb-4">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => nav('/analytics', {
-                    state: { cycleName: c.name, targetUser: user.username }
-                  })}
-                >
-                  <BarChart2 className="w-4 h-4 mr-1" />
-                  Анализ
-                </Button>
-              </div>
-            </div>
+            <Card key={c.id}>
+              <CardContent className="p-4">
+                <div className="flex items-start gap-2">
+                  <div className="flex-1 min-w-0">
+                    <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
+                      <h3 className="font-bold text-base break-words">
+                        {c.name}{c.ins_count ? ` (${c.ins_count})` : ''}
+                      </h3>
+                      <span className="text-xs text-muted-foreground whitespace-nowrap">
+                        {c.days_count} дн · пауза {c.pause} дн{c.start_at ? ` · с ${c.start_at}` : ''}
+                      </span>
+                      <span className="text-xs text-muted-foreground whitespace-nowrap">Публичная</span>
+                    </div>
+                    
+                    {c.original_author && (
+                      <p className="text-xs text-muted-foreground mt-1">
+                        от <Link to={`/user/${c.original_author}`} className="text-primary hover:underline">@{c.original_author}</Link>
+                      </p>
+                    )}
+                    
+                    {c.descriptions?.length > 0 && (
+                      <ul className="text-sm space-y-0.5 mt-2 pl-4 list-disc text-muted-foreground overflow-hidden">
+                        {c.descriptions.map((d, i) => (
+                          <li key={i} className="break-words" style={{ overflowWrap: 'anywhere' }} dangerouslySetInnerHTML={{ __html: d }} />
+                        ))}
+                      </ul>
+                    )}
+                  </div>
+
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <button className="p-1 rounded-full hover:bg-muted flex-shrink-0">
+                        <MoreVertical className="w-5 h-5 text-muted-foreground" />
+                      </button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end">
+                      <DropdownMenuItem
+                        onClick={() => nav('/analytics', {
+                          state: { cycleName: c.name, targetUser: user.username }
+                        })}
+                      >
+                        <BarChart2 className="w-4 h-4 mr-2" />
+                        Анализ
+                      </DropdownMenuItem>
+                      {!c.original_author && (
+                        <DropdownMenuItem
+                          onClick={async () => {
+                            try {
+                              await post('/unpublish_cycle/', auth(user, { cycle_name: c.name }))
+                              load()
+                            } catch {}
+                          }}
+                        >
+                          <EyeOff className="w-4 h-4 mr-2" />
+                          Скрыть
+                        </DropdownMenuItem>
+                      )}
+                      <DropdownMenuItem
+                        className="text-destructive focus:text-destructive"
+                        onClick={async () => {
+                          if (!confirm('Удалить тренировку?')) return
+                          try {
+                            await post('/delete_cycle/', auth(user, { cycle_name: c.name }))
+                            load()
+                          } catch {}
+                        }}
+                      >
+                        <Trash2 className="w-4 h-4 mr-2" />
+                        Удалить
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                </div>
+
+                <div className="flex items-center gap-3 mt-3 pt-3 border-t border-border">
+                  <button
+                    className={`flex items-center gap-2 px-4 py-2 rounded-full font-bold text-sm transition-all ${
+                      c.is_in 
+                        ? 'bg-primary text-primary-foreground' 
+                        : 'bg-muted text-muted-foreground hover:bg-muted/80'
+                    }`}
+                    onClick={async () => {
+                      const endpoint = c.is_in ? '/unlike_cycle/' : '/like_cycle/'
+                      try {
+                        const res = await post(endpoint, auth(user, { cycle_id: c.id }))
+                        setProfile(prev => ({
+                          ...prev,
+                          public_cycles: prev.public_cycles.map(cc =>
+                            cc.id === c.id
+                              ? { ...cc, is_in: !cc.is_in, ins_count: res.ins_count }
+                              : cc
+                          ),
+                        }))
+                      } catch {}
+                    }}
+                  >
+                    <span>IN</span>
+                    {(c.ins_count || 0) > 0 && <span>{c.ins_count}</span>}
+                  </button>
+                  
+                  <button
+                    className="flex items-center gap-1.5 text-muted-foreground hover:text-foreground text-sm transition-colors"
+                    onClick={() => setOpenComments(prev => ({ ...prev, [c.id]: !prev[c.id] }))}
+                  >
+                    <MessageCircle className="w-5 h-5" />
+                  </button>
+                </div>
+
+                <CommentSection 
+                  targetType="cycle" 
+                  targetId={c.id} 
+                  isOpen={openComments[c.id] || false}
+                  onToggle={() => setOpenComments(prev => ({ ...prev, [c.id]: !prev[c.id] }))}
+                  renderButton={false}
+                />
+              </CardContent>
+            </Card>
           )) : (
             <div className="text-center py-12">
               <p className="text-muted-foreground mb-4">Нет публичных тренировок</p>
@@ -282,45 +336,7 @@ export default function Profile() {
                   </DropdownMenu>
                 </div>
 
-                <div className="mt-3 pt-3 border-t border-border">
-                  <button
-                    className="flex items-center gap-1 text-muted-foreground hover:text-foreground text-sm"
-                    onClick={() => toggleNoteComments(n.id)}
-                  >
-                    <MessageCircle className="w-4 h-4" />
-                    {(noteComments[n.id] || []).length || ''}
-                  </button>
-                </div>
-
-                {openComments[n.id] && (
-                  <div className="mt-3 pt-3 border-t border-border space-y-3">
-                    <form className="flex gap-2" onSubmit={(e) => submitNoteComment(e, n.id)}>
-                      <Input
-                        className="flex-1"
-                        placeholder="Комментарий..."
-                        value={commentTexts[n.id] || ''}
-                        onChange={e => setCommentTexts(prev => ({ ...prev, [n.id]: e.target.value }))}
-                      />
-                      <Button type="submit" size="sm" disabled={!(commentTexts[n.id] || '').trim()}>
-                        →
-                      </Button>
-                    </form>
-                    {(noteComments[n.id] || []).length > 0 ? (noteComments[n.id]).map(c => (
-                      <div className="flex items-start gap-2" key={c.id}>
-                        <Link to={`/user/${c.user}`} className="font-medium text-sm hover:underline">{c.user}</Link>
-                        <span className="text-sm flex-1">{c.text}</span>
-                        {c.user === user.username && (
-                          <button
-                            className="text-muted-foreground hover:text-destructive text-sm"
-                            onClick={() => deleteComment(c.id, n.id)}
-                          >×</button>
-                        )}
-                      </div>
-                    )) : (
-                      <p className="text-sm text-muted-foreground text-center py-2">Нет комментариев</p>
-                    )}
-                  </div>
-                )}
+                <CommentSection targetType="note" targetId={n.id} />
               </CardContent>
             </Card>
           )) : (
@@ -375,13 +391,7 @@ export default function Profile() {
         </div>
       )}
 
-      {/* Logout */}
-      <div className="mt-8 text-center">
-        <Button variant="outline" onClick={doLogout}>
-          <LogOut className="w-4 h-4 mr-2" />
-          Выйти
-        </Button>
-      </div>
+
     </div>
   )
 }

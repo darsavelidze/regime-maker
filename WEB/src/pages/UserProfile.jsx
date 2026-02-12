@@ -3,7 +3,7 @@ import { useParams, useNavigate, Link, Navigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { get, post, auth } from '../api'
 import WorkoutCard from '../components/WorkoutCard'
-import { ArrowLeft, UserPlus, UserCheck, BarChart2, Loader2 } from 'lucide-react'
+import { ArrowLeft, UserPlus, UserCheck, Loader2 } from 'lucide-react'
 import { Card, CardContent } from '../components/ui/Card'
 import { Button } from '../components/ui/Button'
 import { Avatar, AvatarFallback } from '../components/ui/Avatar'
@@ -139,11 +139,11 @@ export default function UserProfile() {
 
           {/* Stats */}
           <div className="grid grid-cols-4 gap-2 mt-6">
-            <div className="text-center">
+            <div className="text-center py-1">
               <p className="text-xl font-bold">{profile.cycles_count || 0}</p>
               <p className="text-xs text-muted-foreground">тренировок</p>
             </div>
-            <div className="text-center">
+            <div className="text-center py-1">
               <p className="text-xl font-bold">{profile.total_ins || 0}</p>
               <p className="text-xs text-muted-foreground">IN</p>
             </div>
@@ -180,23 +180,7 @@ export default function UserProfile() {
       {tab === 'workouts' && (
         <div>
           {profile.public_cycles?.length > 0 ? profile.public_cycles.map(c => (
-            <div key={c.id}>
-              <WorkoutCard cycle={c} showAuthor={false} onIn={user ? toggleIn : null} />
-              {user && (
-                <div className="flex justify-end -mt-2 mb-4">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => nav('/analytics', {
-                      state: { cycleName: c.name, targetUser: username }
-                    })}
-                  >
-                    <BarChart2 className="w-4 h-4 mr-1" />
-                    Анализ
-                  </Button>
-                </div>
-              )}
-            </div>
+            <WorkoutCard key={c.id} cycle={c} showAuthor={false} onIn={user ? toggleIn : null} />
           )) : (
             <div className="text-center py-12 text-muted-foreground">
               <p>Нет публичных тренировок</p>

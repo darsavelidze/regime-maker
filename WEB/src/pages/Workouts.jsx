@@ -2,10 +2,9 @@ import { useState, useEffect, useCallback } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { post, auth } from '../api'
-import { MoreVertical, Globe, Lock, BarChart2, Trash2, Loader2 } from 'lucide-react'
+import { MoreVertical, Globe, Lock, BarChart2, Trash2, Loader2, EyeOff } from 'lucide-react'
 import { Card, CardContent } from '../components/ui/Card'
 import { Button } from '../components/ui/Button'
-import { Badge } from '../components/ui/Badge'
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from '../components/ui/DropdownMenu'
 
 export default function Workouts() {
@@ -57,21 +56,61 @@ export default function Workouts() {
       {cycles.length > 0 ? cycles.map(c => (
         <Card className="mb-4" key={c.id}>
           <CardContent className="p-4">
-            <div className="flex items-start justify-between mb-2">
-              <div className="flex items-center gap-2 flex-wrap">
-                <h3 className="font-bold text-lg">{c.name}</h3>
-                <Badge variant={c.is_public ? 'success' : 'muted'}>
-                  {c.is_public ? 'Публичная' : 'Приватная'}
-                </Badge>
+            <div className="flex items-start gap-2">
+              <div className="flex-1 min-w-0">
+                <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
+                  <h3 className="font-bold text-base break-words">{c.name}</h3>
+                  <span className="text-xs text-muted-foreground whitespace-nowrap">
+                    {c.days_count} дн · пауза {c.pause} дн{c.start_at ? ` · с ${c.start_at}` : ''}
+                  </span>
+                  <span className="text-xs text-muted-foreground whitespace-nowrap">
+                    {c.is_public ? 'Публичная' : 'Приватная'}
+                  </span>
+                </div>
+                
+                {c.original_author && (
+                  <p className="text-xs text-muted-foreground mt-1">
+                    от <Link to={`/user/${c.original_author}`} className="text-primary hover:underline">@{c.original_author}</Link>
+                  </p>
+                )}
+                
+                {c.descriptions?.length > 0 && (
+                  <ul className="text-sm space-y-0.5 mt-2 pl-4 list-disc text-muted-foreground overflow-hidden">
+                    {c.descriptions.map((d, i) => (
+                      <li key={i} className="break-words" style={{ overflowWrap: 'anywhere' }} dangerouslySetInnerHTML={{ __html: d }} />
+                    ))}
+                  </ul>
+                )}
               </div>
-              
+
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <button className="p-2 rounded-full hover:bg-muted">
-                    <MoreVertical className="w-5 h-5" />
+                  <button className="p-1 rounded-full hover:bg-muted flex-shrink-0">
+                    <MoreVertical className="w-5 h-5 text-muted-foreground" />
                   </button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end">
+                  <DropdownMenuItem
+                    onClick={() => nav('/analytics', { state: { cycleName: c.name } })}
+                  >
+                    <BarChart2 className="w-4 h-4 mr-2" />
+                    Анализ
+                  </DropdownMenuItem>
+                  {!c.original_author && (
+                    <DropdownMenuItem onClick={() => togglePublish(c)}>
+                      {c.is_public ? (
+                        <>
+                          <EyeOff className="w-4 h-4 mr-2" />
+                          Скрыть
+                        </>
+                      ) : (
+                        <>
+                          <Globe className="w-4 h-4 mr-2" />
+                          Опубликовать
+                        </>
+                      )}
+                    </DropdownMenuItem>
+                  )}
                   <DropdownMenuItem 
                     className="text-destructive focus:text-destructive"
                     onClick={() => deleteCycle(c.name)}
@@ -81,54 +120,6 @@ export default function Workouts() {
                   </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
-            </div>
-            
-            <p className="text-sm text-muted-foreground mb-2">
-              {c.days_count} дн · пауза {c.pause} дн · с {c.start_at}
-            </p>
-            
-            {c.original_author && (
-              <p className="text-xs text-muted-foreground mb-2">
-                от <Link to={`/user/${c.original_author}`} className="text-primary hover:underline">@{c.original_author}</Link>
-              </p>
-            )}
-            
-            {c.descriptions?.length > 0 && (
-              <ul className="text-sm space-y-1 mt-3 pl-4 list-disc text-muted-foreground">
-                {c.descriptions.map((d, i) => (
-                  <li key={i} dangerouslySetInnerHTML={{ __html: d }} />
-                ))}
-              </ul>
-            )}
-            
-            <div className="flex gap-2 mt-4 pt-4 border-t border-border">
-              {!c.original_author && (
-                <Button 
-                  variant="outline" 
-                  size="sm"
-                  onClick={() => togglePublish(c)}
-                >
-                  {c.is_public ? (
-                    <>
-                      <Lock className="w-4 h-4 mr-1" />
-                      Скрыть
-                    </>
-                  ) : (
-                    <>
-                      <Globe className="w-4 h-4 mr-1" />
-                      Опубликовать
-                    </>
-                  )}
-                </Button>
-              )}
-              <Button 
-                variant="outline" 
-                size="sm"
-                onClick={() => nav('/analytics', { state: { cycleName: c.name } })}
-              >
-                <BarChart2 className="w-4 h-4 mr-1" />
-                Анализ
-              </Button>
             </div>
           </CardContent>
         </Card>

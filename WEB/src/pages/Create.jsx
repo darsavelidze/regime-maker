@@ -341,11 +341,11 @@ function AddExerciseRow({ exercises, onAdd }) {
   }
 
   return (
-    <div className="flex gap-2">
+    <div className="flex gap-2 min-w-0">
       <select 
         value={selId} 
         onChange={e => setSelId(e.target.value)}
-        className="flex-1 h-11 rounded-lg border border-border bg-input px-3 text-sm"
+        className="flex-1 min-w-0 h-11 rounded-lg border border-border bg-input px-3 text-sm truncate"
       >
         <option value="">Упражнение...</option>
         {exercises.map(ex => (
@@ -358,9 +358,9 @@ function AddExerciseRow({ exercises, onAdd }) {
         max="10" 
         value={sets}
         onChange={e => setSets(parseInt(e.target.value) || 1)}
-        className="w-16"
+        className="w-14 flex-shrink-0"
       />
-      <Button type="button" onClick={add}>+</Button>
+      <Button type="button" onClick={add} className="flex-shrink-0">+</Button>
     </div>
   )
 }
